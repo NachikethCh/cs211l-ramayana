@@ -1,0 +1,458 @@
+======================================================================
+SITA EVENT CANDIDATE GENERATOR
+======================================================================
+Character: Sītā
+Mentions found: 33
+
+Candidate groups: 24
+
+
+======================================================================
+CANDIDATE EVENT 1
+======================================================================
+Character: Sītā
+Chapter: 1
+Paragraph range: 24 - 28
+
+    [24] On the eve of his departure for the forest, that enhancer of Sumitrā ’s joy and favourite of his brother (Rāma), his dear brother Lakṣmaṇa , endowed with humility, displaying brotherliness, followed him out of affection.
+
+    [25] As Rohiṇī followed with the moon, Rāma’s beloved spouse, sprung in Janaka ’s line—like as an embodiment of Divine power—sear (Rāma) as life itself, and engaged in acts of good, and furnished with every auspicious mark, and the best of wives, followed Rāma. Having been followed far by his father Daśaratha along with the citizens.
+
+>>> [26] Rāma met with the virtuous and beloved king of the Niṣādas ; and then in company with Guha , Lakṣmaṇa, and Sītā , Rāma dismissed his charioteer on the banks of the Ganges at Śṛṅgaverapura .
+
+    [27] Then wending from one forest to another, and having crossed many broad rivers, they, in accordance with Bharadvāja ’s directions, arrived at the Citrakūṭa ; and constructing a romantic abode, the three began to live there.
+
+    [28] They spent their days in delight, in the company of gods and Gandharvas . And when Rāma had reached the Citrakūṭa, king Daśaratha, distressed on account of his son, went to heaven, bewailing the latter.
+
+
+======================================================================
+CANDIDATE EVENT 2
+======================================================================
+Character: Sītā
+Chapter: 1
+Paragraph range: 42 - 46
+
+    [42] That one (Mārīca) commanding illusions, having drawn far the king’s sons (Rāma and Lakṣmaṇa), he (Rāvaṇa) carried away Rāma’s wife, slaying the vulture Jaṭāyu .
+
+    [43] And beholding the vulture slain and learning of the kidnapping of Mithilā ’s daughter, the descendant of Raghu , deprived of sense, bewailed in grief.
+
+>>> [44] Having with unassuaged sorrow burnt the vulture Jaṭāyu, as he was searching for Sītā in that forest, he fell in with a Rākṣasa, Kabandha by name, of a dreadful and deformed shape. Having slain him, the mighty-armed one burnt his body,—and thereupon he went to heaven.
+
+    [45] And the Rākṣasa addressed Rāma saying, O descendant of Raghu, Do you repair to the ascetic, Śabarī , conversant with all systems of morality.
+
+    [46] Repairing to Śabarī, that destroyer of foes, gifted with exceeding energy, Rāma, the son of Daśaratha, highly honoured by Śabarī.
+
+
+======================================================================
+CANDIDATE EVENT 3
+======================================================================
+Character: Sītā
+Chapter: 1
+Paragraph range: 45 - 49
+
+    [45] And the Rākṣasa addressed Rāma saying, O descendant of Raghu, Do you repair to the ascetic, Śabarī , conversant with all systems of morality.
+
+    [46] Repairing to Śabarī, that destroyer of foes, gifted with exceeding energy, Rāma, the son of Daśaratha, highly honoured by Śabarī.
+
+>>> [47] Than he met with Hanumān on the banks of the Pampā . Then, agreeably to Hanumān’s advice, the exceedingly powerful Rāma saw Sugrīva . And detailed to him all specially touching Sītā.
+
+    [48] Then the monkey Sugrīva, having heard all from Rāma was well pleased with Rāma, and in the presence of fire, made friends with him.
+
+    [49] Then the king of monkeys, out of friendship, mournfully related to him all about his hostilities with Vālī .
+
+
+======================================================================
+CANDIDATE EVENT 4
+======================================================================
+Character: Sītā
+Chapter: 1
+Paragraph range: 57 - 61
+
+    [57] Then that best of monkeys having summoned all the various monkeys, sent them in various directions in search of Janaka’s daughter.
+
+    [58] Then at the suggestion of the vulture Sampāti , the mighty Hanumān crossed the salt sea extending for a hundred Yojanas (900 miles).
+
+>>> [59] Thereby arriving at the city of Laṅkā , ruled by Rāvaṇa, he found Sītā in the midst of an Aśoka garden, absorbed in thought.
+
+    [60] Then having shown her the sign, he related to her all about the friendship between Rāma and Sugrīva, and having convinced Videha ’s daughter, he smashed the gate of the place.
+
+    [61] Then having slain five generals, and seven counsellors’ sons, and crushed the heroic Akṣa , he was bound fast (by the armsof Indrajit .)
+
+
+======================================================================
+CANDIDATE EVENT 5
+======================================================================
+Character: Sītā
+Chapter: 1
+Paragraph range: 62 - 66
+
+    [62] Then knowing that in virtue of the grand-sire’s boon, he was free, he forgave those Rākṣasas that were leading him (to Rāvaṇa.)
+
+    [63] Then having burnt down the city of Laṅkā, with the exception of the place occupied by Mithilā’s daughter, the mighty one returned, with the intention of delivering the glad tidings to Rāma.
+
+>>> [64] That one of immeasurable soul having come before the high-souled Rāma, and circled him addressed him, saying,—I have truly seen Sītā.
+
+    [65] Thereafter accompanied by Sugrīva, Rāma repaired to the shore of the mighty ocean, and with shafts resembling the sun, vexed the deep.
+
+    [66] Then that lord of rivers, the Ocean, showed himself. And agreeably to the advice of the Ocean, Nala constructed a bridge (over the water.)
+
+
+======================================================================
+CANDIDATE EVENT 6
+======================================================================
+Character: Sītā
+Chapter: 1
+Paragraph range: 65 - 71
+
+    [65] Thereafter accompanied by Sugrīva, Rāma repaired to the shore of the mighty ocean, and with shafts resembling the sun, vexed the deep.
+
+    [66] Then that lord of rivers, the Ocean, showed himself. And agreeably to the advice of the Ocean, Nala constructed a bridge (over the water.)
+
+>>> [67] By that bridge Rāma went to the city of Laṅkā, and slew Rāvaṇa in battle. And, having recovered Sītā, Rāma experienced high shame (in consequence of Sītā’s having lived so long in Rāvaṇa’s place.)
+
+>>> [68] Language towards Sītā in the presence of all. Incapable of bearing it, the chaste Sītā entered flaming fire.
+
+>>> [69] Thereupon assured by Agni as to the sinlessness of Sītā, Rāma became exceedingly pleased, and was honoured by all the deities. And at that great act of Rāma’s the three worlds with all that was mobile and immobile in them, along with the sages and gods, were well pleased with the mighty-souled Rāghava.
+
+    [70] Then installing that foremost of Rākṣasas, Vibhīṣaṇa , on the throne of Laṅkā, Rāma was perfectly easy, and rejoiced exceedingly.
+
+    [71] Then Rāma, obtaining a boon from the celestials, revived the monkeys fallen in battle, and surrounded by friends, set out for Ayodhyā on the Puṣpaka .
+
+
+======================================================================
+CANDIDATE EVENT 7
+======================================================================
+Character: Sītā
+Chapter: 1
+Paragraph range: 72 - 76
+
+    [72] And repairing to Bharadvāja’s hermitage, Rāma, having truth for his prowess, despatched Hanumān to Bharata.
+
+    [73] Then talking over past affairs, accompanied with Sugrīva, Rāma, mounted on the Puṣpaka, and departed for Nandigrāma.
+
+>>> [74] Having arrived at Nandigrāma, the sinless Rāma sheared himself of his matted locks along with his brothers, and having regained Sītā, got back his kingdom
+
+    [75] (During his reign) his subjects will enjoy happiness, and contentment, and become hale, and grow in righteousness, and be devoid of mental disquietude and disease, and free from the fear of famine.
+
+    [76] Where a no person is to witness his son’s death, and women will be ever chaste, and never bear widow-hood.
+
+
+======================================================================
+CANDIDATE EVENT 8
+======================================================================
+Character: Sītā
+Chapter: 3
+Paragraph range: 1 - 5
+
+    [1] Having heard the entire prevalent history of the intelligent Rāma , capable of conferring religious merit and the two other cognate objects, as well as emancipation, Vālmīki again sought to get insight into it
+
+    [2] And, sitting himself facing the east on a cushion of kuśa grass, and sipping water according to the ordinance, he addressed himself to the contemplation of the subject through Yoga .
+
+>>> [3] And by virtue of his Yoga powers, he clearly observed before him Rāma, and Lakṣmaṇa , and Sītā , and Daśaratha together with his wives in his kingdom, laughing, and talking, and acting, and bearing themselves as in real life.
+
+    [4] He also saw all that was endured by Rāma firm in promise, with his wife as the third accompanist roaming in the forest
+
+    [5] And like an embolic myrobalan on his palm, that righteous-souled sage by virtue of his yoga, perceived all that had happened as well as all that would happen in the past.
+
+
+======================================================================
+CANDIDATE EVENT 9
+======================================================================
+Character: Sītā
+Chapter: 3
+Paragraph range: 11 - 17
+
+    [11] And Rāma’s building a mansion there and sojourn; and Bharata ’s arrival, and his propitiation of Rāma; and Rāma’s offering oblations to the manes of his father.
+
+    [12] And the installation of the sandals; and Bharata’s dwelling at Nandigrāma : and Rāma’s removal to Daṇḍaka and killing of Virādha .
+
+>>> [13] And Rāma’s interview with Śarabhaṅga and meeting with Sutīkṣna; and Sītā’s companionship with Anasūyā , and the latter’s painting the former.
+
+>>> [14] And Rāma’s interview with Agastya , and his obtaining the bow from him; and the dialogue of Śūrpaṇakhā and her disfigurement.
+
+>>> [15] And the slaughter of Khara and Triśiras ; and the exertions of Rāvaṇa ; the killing of Mārīca , and the carrying away of Vaidehī .
+
+    [16] Rāghava ’s lamentations, and the death of the king of vultures; Rāma’s encounter with Kabandha , and his view of Pampā .
+
+    [17] Rāma’s interview with Śabarī , and his subsistence there on fruits and roots; Rāma’s lamentations at Pampā, and meeting with Hanumān .
+
+
+======================================================================
+CANDIDATE EVENT 10
+======================================================================
+Character: Sītā
+Chapter: 3
+Paragraph range: 20 - 26
+
+    [20] The making over of his ring by Rāma to Hanumān; Ṛkṣa ’s discovery of the cave. The abstemious abode of the monkeys on the shore of the ocean; Hanumān’s interview with Sampāti .
+
+    [21] Hanumān’s ascension of the mountain, and his bounding over the main; and his sight of the Maināka at the injunction of Ocean; the roaring of Rākṣasis; Hanumān’s meeting with the Rākṣasa Chāyāgrāha. Hanumān’s destruction of Siṃhikāyā; and Hanumān's sight of Laṅkā .
+
+>>> [22] His entrance by night into Laṅkā; his ascertaining of conduct in times of helplessness; his journey to the Āpāna ground; and his sight of his car Puṣpaka ; his walk to the Aśoka forest, and sight there of Sītā.
+
+>>> [23] His presentation of the ring to Sītā and converse with her; and the roaring of the Rākṣasis; and the dreaming of the dream by Trijaṭā .
+
+>>> [24] Sītā’s handing a gem to Hanumān; and the breaking down of trees; and the fight of the Rākaṣasis, and the slaughter of the salves.
+
+    [25] The wind-god’s son being taken captive; and his terrible roars while burning down Laṅkā; and his bounding back over the ocean; and the forcible possession of honey.
+
+    [26] Hanumān's consoling Rāghava, and handing him the gem; Rāma’s interview with ocean; and Nala ’s constructing the bridge.
+
+
+======================================================================
+CANDIDATE EVENT 11
+======================================================================
+Character: Sītā
+Chapter: 3
+Paragraph range: 26 - 30
+
+    [26] Hanumān's consoling Rāghava, and handing him the gem; Rāma’s interview with ocean; and Nala ’s constructing the bridge.
+
+    [27] The army’s crossing of the ocean; and the nightly siege of Laṅkā; and Rāma, interview with Bibhishana ; the communication as to the means of destruction.
+
+>>> [28] And the killing of Kumbhakarṇa and Meghanāda ; and the destruction of Rāvaṇa, and the recovery of Sītā in the enemy’s city.
+
+    [29] And the coronation of Vibhīṣaṇa , and the sight of Puṣpaka; Rāma’s return towards Ayodhyā, and meeting with Bharadvāja.
+
+    [30] Despatch of Hanumān; and Rāma’s meeting with Bharata; and the installation of Rāma; and the dismissal of all the forces.
+
+
+======================================================================
+CANDIDATE EVENT 12
+======================================================================
+Character: Sītā
+Chapter: 3
+Paragraph range: 29 - 33
+
+    [29] And the coronation of Vibhīṣaṇa , and the sight of Puṣpaka; Rāma’s return towards Ayodhyā, and meeting with Bharadvāja.
+
+    [30] Despatch of Hanumān; and Rāma’s meeting with Bharata; and the installation of Rāma; and the dismissal of all the forces.
+
+>>> [31] Rāma’s pleasing his subjects and renunciation of Sītā,—alleles besides concerning Rāma on earth, that has not yet taken place,—have been dealt with by the worshipful sage in the following poem.
+
+
+======================================================================
+CANDIDATE EVENT 13
+======================================================================
+Character: Sītā
+Chapter: 4
+Paragraph range: 3 - 7
+
+    [3] And having composed it, including as well future incidents to happen afterwards, that lord relected [reflected?] as to who should publish the same before assemblies.
+
+    [4] And as that great sage of purified soul was thus pounding, in came Kuśi and Lava , in the guise of the sons of ascetics, and touched his feet.
+
+>>> [5] And he found those illustrious princes the brothers Kuśi and lava, knowing morality, and living in a hermitage, and endowed with rythmic voice, well versed in the Vedas . And finding them of a retentive endowment, and initiated into Vedic studies, that lord thought them how to interpret the Vedas, and that vow-observing one taught them the great Rāmāyaṇa in full, treating of Sītā ’s great life, and the destruction of Paulastya ( Rāvaṇa ).
+
+    [6] Those sweet-voiced brothers, resembling Gandharvas in grace, accomplished in music and dancing, and cognizant of Sthāna and Mūrchanā , began to time to the accompaniment of stringed instruments, and fraught with the sentiments of love, pathos, risibility, the irascible, the terrible, and the heroic. And knowing the characteristics that go to make up the Drama , and gifted with mellifluous voices, those blameless princes, coming from Rāma’s body, and resembling him (like two images of one body, they were two images of made of Rāma’s body).
+
+    [7] Even as the reflection of the solar or the lunar disc resembles that disc; got by heart that excellent and moral story in its entirety; and those princes versed in the Fine arts, with a concentrated mind chanted it as they had learnt it, in the assemblies of ascetics and Brāhmaṇas and good men.
+
+
+======================================================================
+CANDIDATE EVENT 14
+======================================================================
+Character: Sītā
+Chapter: 43
+Paragraph range: 7 - 11
+
+    [7] O Rāma, as that sacred one plunged upon Rudra ’s holy head of tangled locks, resembling Himavat she could by no means reach the earth, despite all her endeavours; nor did she obtain egress from under the matted locks. And she wandered there for many a year.
+
+    [8] And finding Gaṅgā in this plight, Bhagīratha became again engaged in high austerities. And thereupon Śiva, O descendant of Raghu , was exceedingly gratified; and cast Gaṅgā off in the direction of the Binḍu lake. And as she was let off seven streams branched out from her.
+
+>>> [9] And the three streams of the excellent Gaṅgā of auspicious waters took an easterly direction; while the Sucakṣu , the Sītā , and that mighty river the Sindhu flowed on the auspicious west.
+
+    [10] And the seventh followed Bhagīratha’s car. And that royal saint, the exceedingly puissant Bhagīratha, mounted on a superb car, went before; and Gaṅgā followed him. And she descended from the welkin upon Śaṅkara’s head, thence alighting upon the earth.
+
+    [11] And there her waters flowed with thundering sounds. And earth looked beautiful with swarms of fallen and falling fishes, and tortoises, and porpoises.
+
+
+======================================================================
+CANDIDATE EVENT 15
+======================================================================
+Character: Sītā
+Chapter: 66
+Paragraph range: 9 - 13
+
+    [9] Thereat, O powerful ascetic, with agitated hearts, the deities fell to propitiating that lord of the celestials, and Bhava was pleased with them.
+
+    [10] And well-pleased with them, he conferred this upon those high-souled ones. And even this is that jewel of a bow belonging to the high-souled god of gods, and which was ultimately, O lord, consigned as a trust to our ancestor.
+
+>>> [11] And as I was ploughing the mead, arose a damsel, and as I obtained her while hallowing the field (for sacrifice), she has come to be known by the name of Sītā . And arising from the earth, she grew as my daughter.
+
+    [12] Unsprung from the usual source, she was then established here as my daughter, whose hand must be obtained by bending the bow. And, O foremost of ascetics, many a king, coming here, had saught to obtain my growing daughter arisen from the earth. But, O worshipful one, in consideration of her being one whose dower must be prowess in bending the bow, I would not bestow my daughter upon those lords of earth seeking for the kings in a body began to flock to Mithila , desirous of being acquainted with the strength of the bow.
+
+    [13] And on their being curious (as to the bow), I showed it to them; but they could neither hold nor wield it.
+
+
+======================================================================
+CANDIDATE EVENT 16
+======================================================================
+Character: Sītā
+Chapter: 66
+Paragraph range: 17 - 21
+
+    [17] At length those wicked kings, meeting with slaughter, broke and fled in all directions, together with their adherents, bereft of vigour, and confidence in their strength.
+
+    [18] And, O puissant ascetic, this highly effulgent bow will I show to Rāma and Lakṣmaṇa .
+
+>>> [19] O you of excellent vows. And, if, Ascetic, Rāma succeeds in fixing string to it, I will confer upon Daśaratha’s son my daughter Sītā, unsprung from the usual source.
+
+
+======================================================================
+CANDIDATE EVENT 17
+======================================================================
+Character: Sītā
+Chapter: 67
+Paragraph range: 15 - 21
+
+    [15] On the people being reassured, the king conversant with speech, his apprehension removed, with folded hands addressed that puissant ascetic, saying.
+
+    [16] O worshipful one, I have beheld the prowess of Daśaratha ’s son. This is verily wonderful and inconceivable; and I did not think this was possible.
+
+>>> [17] My daughter, Sītā , being united with her lord, Daśaratha’s son, Rāma, will shed lustre on Janaka’s line.
+
+>>> [18] My promise viz., that I will confer Sītā upon him that will bend the bow, has been fulfilled, O son of Kuśika . And this Sītā, this my daughter, dearer to me than life will I confer upon Rāma.
+
+>>> [19] O Brāhmaṇa, by your permission let my counsellors speedily post hence, O Kauśika , to Ayodhyā , in cars; and with humble speech bring the king to my capital. And let them communicate to him all about the bestowal of’ Sītā upon Rāma, in consequence of his having bent the bow.
+
+    [20] Let them acquaint the monarch with the welfare of the Kākutsthas protected by the ascetic; and let them, speedily posting hence, bring the delighted king.
+
+    [21] And thereupon Kuśika’s son said,—So be it. And the righteous king, summoning his counsellors, despatched them to Ayodhyā with his letter, to communicate all duly to the king, and bring him thither.
+
+
+======================================================================
+CANDIDATE EVENT 18
+======================================================================
+Character: Sītā
+Chapter: 68
+Paragraph range: 5 - 9
+
+    [5] You know the vow I had made formerly—viz., to confer my daughter upon him that would bend the bow,—and the kings, in consequence of their having been deprived of prowess, and being baffled, have come to entertain spite against me.
+
+    [6] And that daughter of mine, O king, has been won by your son, arrived one, that divine, jewelled bow has been snapped in the middle by the high-souled Rāma in the midst of a large assembly.
+
+>>> [7] Upon that high-souled one should I confer Sītā , having prowess assigned for her dower. And in this wise will I free myself from my vow; and this you should permit.
+
+    [8] O mighty king, do you, good betide you, come speedily headed by your priests. It behove you to see the Rāghavas ;
+
+    [9] And, O foremost of kings, to see me delivered from this vow. And do you attain the joy incident to the nuptials of both your sons,
+
+
+======================================================================
+CANDIDATE EVENT 19
+======================================================================
+Character: Sītā
+Chapter: 71
+Paragraph range: 13 - 17
+
+    [13] And on my aged sire ascending heaven, I righteously ruled the kingdom and cherished my brother Kuśadvaja resembling a celestial, with the eye of affection.
+
+    [14] It came to pass that on one occasion a certain powerful king named Sudhanvan came before Mithilā intending to lay siege to it.
+
+>>> [15] He sent word to me, saying, ‘Do you give me the all-excellent bow of Śiva , as well as your daughter, the lotus-even Sītā .’
+
+    [16] And is consequence of my not granting him either, king Sudhanvan, O Brahmarṣi , entered into hostilities with me; but he was both defeated and slain by me in the encounter.
+
+    [17] O foremost of ascetics, slaying king Sudhanvan. I installed in Sāṅkāśyā my heroic brother Kuśadhvaja.
+
+
+======================================================================
+CANDIDATE EVENT 20
+======================================================================
+Character: Sītā
+Chapter: 71
+Paragraph range: 17 - 21
+
+    [17] O foremost of ascetics, slaying king Sudhanvan. I installed in Sāṅkāśyā my heroic brother Kuśadhvaja.
+
+    [18] Thus one, O mighty anchorite, is my younger brother, and I am his elder. O powerful ascetic, well pleased will I confer on you these as your daughter-in-law,
+
+>>> [19] Sītā on Rāma , good betide you, and Urmilā on Lakṣmaṇa . And, I take oath thrice that, without doubt, I will with a glad heart confer upon you, O potent ascetic, as your daughters-in-law my second daughter Urmilā and also Sītā resembling the daughter of a celestial, having prowess assigned for her dower.
+
+    [20] Do you now, O king, give away kine on behalf of the nuptials of Rāma and Lakṣmaṇa; and also perform their ancestral rites, good to you; and then complete the marriage ceremony.
+
+    [21] To-day the star Maghā is on the ascendant. On the third day, my master, when the Phalguna will be on the north, do you, O monarch, perform the marriage ceremony. Do you now, however, dispense gifts for invoking blessings upon Rāma and Lakṣmaṇa.
+
+
+======================================================================
+CANDIDATE EVENT 21
+======================================================================
+Character: Sītā
+Chapter: 72
+Paragraph range: 1 - 5
+
+    [1] When Vaideha had spoken thus, the mighty ascetic Viśvāmitra is company with Vasiṣṭha addressed that heroic king, saying.
+
+    [2] O puissant one, the lines of the Ikṣvākus and the Vaidehas are exceedingly noble and incomparable. No other race can by any means compare with them.
+
+>>> [3] O monarch, this youthful union of Rāma and Lakṣmaṇa with Sītā and Urmilā is fit by all means; and it is worthy of their wealth of grace.
+
+    [4] Now do you, O foremost of men, listen to my words. This youthful brother of yours, king Kuśadhvaja , O you versed in morality, this pious-souled one, O king, has, O prime of men, a couple of daughters, unparalleled on earth in beauty, whom we would ask for, to become wives to the prince Bharata and the intelligent Śatrughna ; as we, O king, ask for your own daughters in the interests of those high-souled ones (Rāma and Lakṣmaṇa).
+
+    [5] And these sons of Daśaratha are endued with youth and beauty, resembling the Lokapalas , and possessed of the prowess of celestials.
+
+
+======================================================================
+CANDIDATE EVENT 22
+======================================================================
+Character: Sītā
+Chapter: 73
+Paragraph range: 12 - 18
+
+    [12] Then to the king of the Videhas , Vasiṣṭha spoke as follows,—O saint, do you, O pious one, in company with the saints, perform, O master, the nuptial ceremonies of Rāma charming to all.
+
+    [13] Thereupon, saying, So be it to Janaka, the worshipful saint Vasiṣṭha of mighty austerities with Viśvāmitra and the pious Śatānanda in his front, constracted a dais agreeably to the scriptures, decking it out with fragrant flowers all around, and golden ladles, and variegated water-pots, and platters with ears of barley, and censers filled with Dhūpa , and conchs, and sacrificial spoons, and vessels furnished with Arghyas , and those containing fried paddy, and sanctified Akṣatas . And over the dais, Vasiṣṭha with due mantras and rites spread an awning consisting of Darbhas of equal proportions. And with prescribed rites and mantras placing fire upon the dais, the highly energetic one commenced upon offering oblations.
+
+>>> [14] Then bringing Sītā adorned with various ornaments near the fire, and placing her before Rāghava , king Janaka addressed the enchancer of Kausalyā ’s joy, saying,—This Sītā, my daughter, to you accept, good betide you, as your partner in the observance of every duty: do you take her hand by yours. May she be of excited piety, and devoted to her husband; ever following you like your shadow!
+
+>>> [15] Saying this, the king sprinkled Rāma’s palm with water sanctified with mantras; with the celestials and saints exclaiming, Excellent! Excellent!
+
+>>> [16] And the celestial kettle-drums sounded, and blossoms began to shower down copiously. Having thus given away his daughter Sītā, with water and mantras , king Janaka, overflowing with delight, said, Come forward, O Lakṣmaṇa , good to you. Receive you Urmilā ready to be bestowed by me upon you. Do you accept her hand: let there be no delay about it.
+
+    [17] Having addressed Lakṣmaṇa thus, Janaka spoke to Bharata, saying, Do you, O descendant of Raghu, take Māṇḍavya ’s hand by yours own.
+
+    [18] The righteous lord of Mithilā spoke also to Śatrughna , saying, Do you, O you of mighty arms, take Śrutakīrti ’s hand by your own. May you all be good, and vowed to excellent life! And be, you Kākutsthas , you united with your wives. Let there be no delay about it.
+
+
+======================================================================
+CANDIDATE EVENT 23
+======================================================================
+Character: Sītā
+Chapter: 77
+Paragraph range: 5 - 9
+
+    [5] He urged on his army, and speedily arrived at the city, graced round with standards bearing pennons, and lovely to behold, and resounding with the sounds of trumpets, with its high-ways watered, and beauteous, and sprinkled around with flowers, crowded with citizens looking cheerful on account of the king’s approach, bearing auspicious articles in their hands, and beautified with the vast concourse of people. And received by the citizens as well as the regenerate ones inhabiting the city coming forward a long way, and followed by his graceful son, the handsome Majesty of illustrious name entered his own dear residence, like to the Himavat .
+
+    [6] And entertained by his own relatives with all objects of enjoyment, the monarch rejoiced exceedingly. And Kausalyā and Sumitrā and the slender waisted Kaikeyī , together with other wives of the king, were busy, receiving the brides, with the necessary ceremonies.
+
+>>> [7] And the royal spouses received the exalted Sītā and the famous Urmilā and both the daughters of Kuśadhvaya, graced with silken apparel, with homas performed and blessings invoked, on their behalf. And having paid reverence at the abodes of the gods, and rendered homage to those that deserved the same, the daughters of the kings, well pleased, in private, took joy with all the brothers.
+
+    [8] And having attained brides, and arms, with wealth and friends, those foremost of men, engaged in ministering to their father.
+
+    [9] And once on a time that descendant of Raghu, king Daśaratha addressed Bharata , saying,
+
+
+======================================================================
+CANDIDATE EVENT 24
+======================================================================
+Character: Sītā
+Chapter: 77
+Paragraph range: 17 - 22
+
+    [17] Daśaratha was exceedingly delighted; as also the Brāhmaṇas , and the traders, and the inhabitants generally, at the conduct and behaviour of Rāma.
+
+    [18] Rāma having truth for prowess, by virtue of his excellence appeared to everyone the most meritorious of (Daśaratha’s son) like to the self create Himself to all being.
+
+>>> [19] In the company of Sītā, the wise Rāma, bending his mind to Sītā, with his heart dedicated to her, passed many a season in delight.
+
+>>> [20] Rāma’s beloved Sītā, as having been bestowed upon him by his sire, by her loveliness, and her perfections as much as by her loveliness, went on enhancing his joy. And her lord came to exercise a double influence on her heart.
+
+    [21] And by her own heart, the daughter of Janaka , Mithilā ’s lord, resembling a goddess in grace, and like to Śrī (goddess of wealth) herself in loveliness, completely read his inmost sentiments.
+
+    [22] And experiencing delight, Rāma, receiving the Rājarṣi ’s daughter, exercising her own will—the excellent princess—looked graceful, even like the lord Viṣṇu the chief of celestials on being joined with Śrī.
+
+
+======================================================================
+CANDIDATE GENERATION COMPLETE
+======================================================================
