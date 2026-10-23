@@ -1,251 +1,283 @@
+
 import os
 import re
+import sys
+from collections import defaultdict
+
 import psycopg2
 from dotenv import load_dotenv
 
-load_dotenv()
-
-# ============================================================
-# DATABASE CONFIGURATION
-# ============================================================
+load_dotenv("backend/.env")
 
 DB_NAME = os.getenv("DB_NAME", "postgres")
 DB_USER = os.getenv("DB_USER", "project_se")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
-# ============================================================
-# CONNECT TO POSTGRESQL
-# ============================================================
 
-conn = psycopg2.connect(
-    dbname=DB_NAME,
-    user=DB_USER,
-    password=DB_PASSWORD,
-    host=DB_HOST,
-    port=DB_PORT
-)
+SUMITRA_CHARACTER_ID = 11
 
-cur = conn.cursor()
 
-print("=" * 60)
-print("CHARACTER MENTION EXTRACTION")
-print("=" * 60)
+def is_likely_non_character_mention(paragraph, alias, character_id, match):
+    """Filter only the specific known false-positive patterns."""
 
-def is_likely_non_character_mention(paragraph, alias, character_id):
-    """
-    Returns True when an alias occurrence is clearly being
-    used for something other than the character.
-    """
-
-    # Sītā can refer to both the character and a river.
+    # Preserve the existing Sita/river filter for now.
+    # This paragraph-level rule needs a more precise contextual model.
     if character_id == 2 and alias in ("Sītā", "Sita"):
+        text = paragraph.lower()
 
-        # Clear linguistic indicators that Sītā is a river.
-        river_context = [
-            "river",
-            "rivers",
-            "streams",
-            "stream",
-            "flowed",
-            "flowing",
-            "waters",
-            "water",
-            "Gaṅgā",
-            "Sindhu",
-            "Sucakṣu"
-        ]
+        if (
+            "sītā" in text
+            and any(
+                word in text
+                for word in (
+                    "river", "rivers", "stream", "streams",
+                    "flowed", "flowing", "waters", "water"
+                )
+            )
+        ):
+            return True
 
-        paragraph_lower = paragraph.lower()
+    if character_id == SUMITRA_CHARACTER_ID:
+        before = paragraph[:match.start()]
+        after = paragraph[match.end():]
 
-        for word in river_context:
-            if word.lower() in paragraph_lower:
-                # Only reject if the paragraph actually describes
-                # Sītā in a geographical/water context.
-                if (
-                    "sītā" in paragraph_lower
-                    and (
-                        "river" in paragraph_lower
-                        or "streams" in paragraph_lower
-                        or "stream" in paragraph_lower
-                        or "flowed" in paragraph_lower
-                        or "flowing" in paragraph_lower
-                        or "waters" in paragraph_lower
-                    )
-                ):
-                    return True
+        # Examples: "Sumitra's noble son", "Sumitra's valiant son",
+        # and "Sumitra's noble child".
+        if re.match(
+            r"(?i)^\s*['’]s\s+"
+            r"(?:(?:noble|valiant|dear|beloved|lovely|"
+            r"younger|elder|illustrious|famous|brave)\s+)*"
+            r"(?:son|sons|child|children)\b",
+            after,
+        ):
+            return True
+
+        # Examples: "son of Queen Sumitra", "son of Sumitra",
+        # and "child of Queen Sumitra".
+        if re.search(
+            r"(?i)\b(?:son|sons|child|children)\s+of\s+"
+            r"(?:Queen\s+)?$",
+            before,
+        ):
+            return True
+
+        # Example: "of Sumitra born".
+        if re.match(
+            r"(?i)^\s+born\b",
+            after,
+        ) and re.search(
+            r"(?i)\bof\s+$",
+            before,
+        ):
+            return True
 
     return False
 
-# ============================================================
-# LOAD CHARACTERS + ALIASES
-# ============================================================
 
-cur.execute("""
-    SELECT
-        ca.id,
-        ca.character_id,
-        ca.alias
-    FROM character_aliases ca
-    ORDER BY LENGTH(ca.alias) DESC;
-""")
+def main():
+    conn = None
+    cur = None
 
-aliases = cur.fetchall()
+    inserted_by_source = defaultdict(int)
+    processed_chapters_by_source = defaultdict(set)
 
-print(f"Loaded {len(aliases)} aliases.")
+    try:
+        conn = psycopg2.connect(
+            dbname=DB_NAME,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            host=DB_HOST,
+            port=DB_PORT,
+        )
+        cur = conn.cursor()
 
+        print("=" * 64)
+        print("MULTI-SOURCE CHARACTER MENTION EXTRACTION")
+        print("=" * 64)
 
-# ============================================================
-# LOAD ALL CHAPTERS
-# ============================================================
+        # Load all registered aliases.
+        cur.execute("""
+            SELECT id, character_id, alias
+            FROM character_aliases
+            WHERE alias IS NOT NULL
+              AND BTRIM(alias) <> ''
+            ORDER BY LENGTH(alias) DESC, id;
+        """)
+        aliases = cur.fetchall()
 
-cur.execute("""
-    SELECT
-        id,
-        chapter_number,
-        content
-    FROM chapters
-    ORDER BY chapter_number;
-""")
+        print(f"Aliases loaded: {len(aliases)}")
 
-chapters = cur.fetchall()
+        # Load paragraphs from every source in the database.
+        cur.execute("""
+            SELECT
+                s.id AS source_id,
+                s.title AS source_title,
+                b.book_number,
+                ch.id AS chapter_id,
+                ch.chapter_number,
+                cp.paragraph_number,
+                cp.content
+            FROM sources s
+            JOIN books b ON b.source_id = s.id
+            JOIN chapters ch ON ch.book_id = b.id
+            JOIN chapter_paragraphs cp ON cp.chapter_id = ch.id
+            ORDER BY
+                s.id,
+                b.book_number,
+                ch.chapter_number,
+                cp.paragraph_number;
+        """)
 
-print(f"Loaded {len(chapters)} chapters.")
-print()
+        paragraph_rows = cur.fetchall()
 
+        print(f"Paragraphs loaded: {len(paragraph_rows)}")
 
-# ============================================================
-# PROCESS EACH CHAPTER
-# ============================================================
+        # Load existing mention keys for these paragraphs.
+        # This avoids issuing a SELECT for every alias occurrence.
+        chapter_ids = list({
+            row[3] for row in paragraph_rows
+        })
 
-total_mentions = 0
+        existing_keys = set()
 
-for chapter_id, chapter_number, content in chapters:
-
-    print(f"Processing Chapter {chapter_number}...")
-
-    chapter_mentions = 0
-
-    # --------------------------------------------------------
-    # Split chapter into paragraphs
-    # --------------------------------------------------------
-
-    paragraphs = re.split(r"\n\s*\n", content)
-
-    for paragraph_number, paragraph in enumerate(paragraphs, start=1):
-
-        if not paragraph.strip():
-            continue
-
-        # ----------------------------------------------------
-        # Search every alias
-        # ----------------------------------------------------
-
-        for alias_id, character_id, alias in aliases:
-
-            # Escape the alias so characters such as
-            # parentheses or periods are treated literally.
-            escaped_alias = re.escape(alias)
-
-            # Unicode-aware word boundary.
-            #
-            # (?<!\w) = character before alias isn't a word char
-            # (?!\w)  = character after alias isn't a word char
-            #
-            # This prevents matching:
-            #
-            # Rama
-            # inside
-            # Ramasomething
-            #
-            pattern = r"(?<!\w)" + escaped_alias + r"(?!\w)"
-            if is_likely_non_character_mention(
-                paragraph,
-                alias,
-                character_id
-            ):
-                continue
-            for match in re.finditer(pattern, paragraph):
-
-                start_position = match.start()
-                end_position = match.end()
-
-                mentioned_text = match.group()
-
-                # ------------------------------------------------
-                # Prevent duplicate insertion
-                # ------------------------------------------------
-
-                cur.execute("""
-                    SELECT 1
-                    FROM character_mentions
-                    WHERE character_id = %s
-                      AND alias_id = %s
-                      AND chapter_id = %s
-                      AND paragraph_number = %s
-                      AND start_position = %s
-                      AND end_position = %s
-                    LIMIT 1;
-                """, (
+        if chapter_ids:
+            cur.execute("""
+                SELECT
                     character_id,
                     alias_id,
                     chapter_id,
                     paragraph_number,
                     start_position,
                     end_position
-                ))
+                FROM character_mentions
+                WHERE chapter_id = ANY(%s);
+            """, (chapter_ids,))
 
-                already_exists = cur.fetchone()
+            existing_keys = set(cur.fetchall())
 
-                if already_exists:
-                    continue
+        print(f"Existing mention records checked: {len(existing_keys)}")
 
-                # ------------------------------------------------
-                # Insert mention
-                # ------------------------------------------------
+        # Compile patterns once rather than for every paragraph.
+        compiled_aliases = []
 
-                cur.execute("""
-                    INSERT INTO character_mentions (
+        for alias_id, character_id, alias in aliases:
+            pattern = re.compile(
+                r"(?<!\w)" + re.escape(alias) + r"(?!\w)"
+            )
+            compiled_aliases.append(
+                (alias_id, character_id, alias, pattern)
+            )
+
+        # Extract missing occurrences.
+        for (
+            source_id,
+            source_title,
+            book_number,
+            chapter_id,
+            chapter_number,
+            paragraph_number,
+            paragraph,
+        ) in paragraph_rows:
+
+            processed_chapters_by_source[source_id].add(chapter_id)
+
+            if not paragraph or not paragraph.strip():
+                continue
+
+            for alias_id, character_id, alias, pattern in compiled_aliases:
+                for match in pattern.finditer(paragraph):
+
+                    if is_likely_non_character_mention(
+                        paragraph, alias, character_id, match
+                    ):
+                        continue
+
+                    key = (
                         character_id,
                         alias_id,
                         chapter_id,
                         paragraph_number,
-                        mentioned_text,
-                        start_position,
-                        end_position
+                        match.start(),
+                        match.end(),
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s);
-                """, (
-                    character_id,
-                    alias_id,
-                    chapter_id,
-                    paragraph_number,
-                    mentioned_text,
-                    start_position,
-                    end_position
-                ))
 
-                chapter_mentions += 1
-                total_mentions += 1
+                    # Avoid duplicates already in the database and
+                    # duplicate keys encountered during this run.
+                    if key in existing_keys:
+                        continue
 
-    conn.commit()
+                    cur.execute("""
+                        INSERT INTO character_mentions (
+                            character_id,
+                            alias_id,
+                            chapter_id,
+                            paragraph_number,
+                            mentioned_text,
+                            start_position,
+                            end_position
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s);
+                    """, (
+                        character_id,
+                        alias_id,
+                        chapter_id,
+                        paragraph_number,
+                        match.group(),
+                        match.start(),
+                        match.end(),
+                    ))
 
-    print(
-        f"  ✓ Chapter {chapter_number}: "
-        f"{chapter_mentions} mentions"
-    )
+                    existing_keys.add(key)
+                    inserted_by_source[source_id] += 1
+
+        # One transaction for the complete extraction run.
+        conn.commit()
+
+        print()
+        print("=" * 64)
+        print("EXTRACTION COMPLETE")
+        print("=" * 64)
+
+        cur.execute("""
+            SELECT id, title
+            FROM sources
+            ORDER BY id;
+        """)
+        source_titles = dict(cur.fetchall())
+
+        for source_id in sorted(source_titles):
+            print(f"Source {source_id}: {source_titles[source_id]}")
+            print(
+                "  Chapters processed: "
+                f"{len(processed_chapters_by_source[source_id])}"
+            )
+            print(
+                "  New mentions inserted: "
+                f"{inserted_by_source[source_id]}"
+            )
+
+        print("=" * 64)
+        print(f"Total new mentions: {sum(inserted_by_source.values())}")
+        print("=" * 64)
+
+    except Exception:
+        if conn is not None:
+            conn.rollback()
+
+        print(
+            "Extraction failed. Database transaction rolled back.",
+            file=sys.stderr,
+        )
+        raise
+
+    finally:
+        if cur is not None:
+            cur.close()
+
+        if conn is not None:
+            conn.close()
 
 
-# ============================================================
-# FINISH
-# ============================================================
-
-cur.close()
-conn.close()
-
-print()
-print("=" * 60)
-print("EXTRACTION COMPLETE")
-print("=" * 60)
-print(f"Total new character mentions: {total_mentions}")
-print("=" * 60)
+if __name__ == "__main__":
+    main()

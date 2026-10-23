@@ -29,3 +29,43 @@ Thumbs.db
 
 # Python caches
 .pytest_cache/
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+backend/.env
+
+# Backup files
+*.bak
+*.backup
+*.backup-*
+*.pre_v10.*
+*.pre_unique_alias.*
+*.before_source_filter.bak
+
+# Dependencies and build output
+node_modules/
+dist/
+frontend_backup/
+# Secrets
+.env
+.env.*
+!.env.example
+backend/.env
+
+# Dependencies and generated files
+node_modules/
+dist/
+venv/
+__pycache__/
+.pytest_cache/
+
+# Old frontend backup
+frontend_backup/
+
+# Database backup
+*.dump
+# Local database backups
+*.dump
+data/ramayana.sql
+data/*_backup.sql

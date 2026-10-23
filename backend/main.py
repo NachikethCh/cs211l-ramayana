@@ -44,6 +44,40 @@ def test_database():
         "status": "connected",
     }
 
+@app.get("/sources")
+def get_sources():
+    connection = get_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT
+                    id,
+                    title,
+                    author,
+                    translator,
+                    year,
+                    language,
+                    url
+                FROM sources
+                ORDER BY id;
+            """)
+
+            rows = cursor.fetchall()
+
+        return [
+            {
+                "id": row[0],
+                "title": row[1],
+                "author": row[2],
+                "translator": row[3],
+                "year": row[4],
+                "language": row[5],
+                "url": row[6],
+            }
+            for row in rows
+        ]
+    finally:
+        connection.close()
 
 @app.get("/characters")
 def get_characters():
@@ -160,7 +194,10 @@ def get_character(character_id: int):
 
 
 @app.get("/characters/{character_id}/story")
-def get_character_story(character_id: int):
+def get_character_story(
+    character_id: int,
+    source_id: int | None = None,
+):
     connection = get_connection()
     cursor = connection.cursor()
 
@@ -253,15 +290,36 @@ def get_character_story(character_id: int):
         LEFT JOIN sources s
             ON b.source_id = s.id
         WHERE ce.character_id = %s
+            AND (%s IS NULL OR b.source_id = %s)
         ORDER BY
             ch.chapter_number,
             ce.paragraph_start,
             ce.id;
-    """, (character_id,))
+    """, (character_id,source_id,source_id))
 
     events = cursor.fetchall()
     story_events = []
+
+    # Fetch the selected source independently of character events.
     source_info = None
+    if source_id is not None:
+        cursor.execute("""
+            SELECT title, author, translator, year, language, url
+            FROM sources
+            WHERE id = %s;
+        """, (source_id,))
+
+        source_row = cursor.fetchone()
+
+        if source_row:
+            source_info = {
+                "title": source_row[0],
+                "author": source_row[1],
+                "translator": source_row[2],
+                "year": source_row[3],
+                "language": source_row[4],
+                "url": source_row[5],
+            }
 
     for event in events:
         (
@@ -346,6 +404,157 @@ def get_character_story(character_id: int):
         "related_characters": related_characters,
         "events": story_events,
     }
+
+
+@app.get("/characters/{character_id}/mentions")
+def get_character_mentions(
+    character_id: int,
+    limit: int = 100,
+    offset: int = 0,
+    source_id: int | None = None,
+):
+    if limit < 1 or limit > 200:
+        raise HTTPException(
+            status_code=400,
+            detail="limit must be between 1 and 200",
+        )
+
+    if offset < 0:
+        raise HTTPException(
+            status_code=400,
+            detail="offset cannot be negative",
+        )
+
+    connection = get_connection()
+
+    try:
+        with connection.cursor() as cursor:
+            # Confirm the character exists.
+            cursor.execute(
+                "SELECT id, name FROM characters WHERE id = %s",
+                (character_id,),
+            )
+            character = cursor.fetchone()
+
+            if character is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Character not found",
+                )
+
+            # Count mentions only within the selected source, if provided.
+            cursor.execute(
+                """
+                SELECT COUNT(*)
+                FROM character_mentions cm
+                JOIN chapters ch ON ch.id = cm.chapter_id
+                JOIN books b ON b.id = ch.book_id
+                JOIN sources s ON s.id = b.source_id
+                WHERE cm.character_id = %s
+                  AND (%s IS NULL OR s.id = %s)
+                """,
+                (character_id, source_id, source_id),
+            )
+            total = cursor.fetchone()[0]
+
+            # Fetch passages using the SAME source filter.
+            cursor.execute(
+                """
+                SELECT
+                    cm.id,
+                    cm.mentioned_text,
+                    cm.paragraph_number,
+                    cm.start_position,
+                    cm.end_position,
+                    ch.id AS chapter_id,
+                    ch.chapter_number,
+                    ch.title AS chapter_title,
+                    ch.source_url AS chapter_url,
+                    b.id AS book_id,
+                    b.name AS book_name,
+                    s.id AS source_id,
+                    s.title AS source_title,
+                    s.author,
+                    s.translator,
+                    s.year,
+                    s.language,
+                    s.url AS source_url,
+                    cp.content AS passage
+                FROM character_mentions cm
+                JOIN chapters ch ON ch.id = cm.chapter_id
+                JOIN books b ON b.id = ch.book_id
+                JOIN sources s ON s.id = b.source_id
+                LEFT JOIN chapter_paragraphs cp
+                    ON cp.chapter_id = cm.chapter_id
+                   AND cp.paragraph_number = cm.paragraph_number
+                WHERE cm.character_id = %s
+                  AND (%s IS NULL OR s.id = %s)
+                ORDER BY
+                    s.id,
+                    b.id,
+                    ch.chapter_number NULLS LAST,
+                    cm.paragraph_number NULLS LAST,
+                    cm.start_position NULLS LAST,
+                    cm.id
+                LIMIT %s OFFSET %s
+                """,
+                (
+                    character_id,
+                    source_id,
+                    source_id,
+                    limit,
+                    offset,
+                ),
+            )
+
+            rows = cursor.fetchall()
+
+        mentions = [
+            {
+                "id": row[0],
+                "mentioned_text": row[1],
+                "paragraph_number": row[2],
+                "start_position": row[3],
+                "end_position": row[4],
+                "chapter": {
+                    "id": row[5],
+                    "number": row[6],
+                    "title": row[7],
+                    "url": row[8],
+                },
+                "book": {
+                    "id": row[9],
+                    "name": row[10],
+                },
+                "source": {
+                    "id": row[11],
+                    "title": row[12],
+                    "author": row[13],
+                    "translator": row[14],
+                    "year": row[15],
+                    "language": row[16],
+                    "url": row[17],
+                },
+                "passage": row[18],
+            }
+            for row in rows
+        ]
+
+        return {
+            "character": {
+                "id": character[0],
+                "name": character[1],
+            },
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "has_more": offset + len(mentions) < total,
+            "mentions": mentions,
+        }
+
+    finally:
+        connection.close()
+
 
 
 class ResolveTextRequest(BaseModel):
