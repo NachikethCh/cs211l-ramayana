@@ -1,297 +1,69 @@
 #!/usr/bin/env python3
 
+from __future__ import annotations
+
 import argparse
-import getpass
 import os
 import re
+import sys
 import time
 from html.parser import HTMLParser
-from urllib.parse import urljoin, urlparse
+from pathlib import Path
+from urllib.parse import urlparse
 
+import psycopg2
 import requests
+from dotenv import load_dotenv
 
+def normalize_title(title):
+    title = (title or "").strip()
+    title = re.sub(r"[\s:;,.–—-]+$", "", title)
+    return title
 
-DEFAULT_URL = (
-    "https://www.wisdomlib.org/hinduism/book/"
-    "ramayana-of-valmiki-griffith"
+from preview_wisdomlib_source import (
+    HEADERS,
+    TIMEOUT,
+    discover,
+    fetch,
 )
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; MythverseImporter/1.0)"
-}
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(PROJECT_ROOT / "backend" / ".env")
 
-ROMAN = r"[IVXLCDM]+"
-
-BOOK_RE = re.compile(rf"^Book\s+({ROMAN})\b", re.I)
-
-CHAPTER_RE = re.compile(
-    rf"^Chapter\s+({ROMAN})\b\s*(?:-\s*)?:?\s*(.*)$",
-    re.I,
-)
+MAX_CHAPTER_SIZE = 5_000_000
+REQUEST_DELAY = 0.12
 
 
-def roman_to_int(value):
-    values = {
-        "I": 1,
-        "V": 5,
-        "X": 10,
-        "L": 50,
-        "C": 100,
-        "D": 500,
-        "M": 1000,
-    }
-
-    value = value.upper()
-    total = 0
-    previous = 0
-
-    for char in reversed(value):
-        number = values[char]
-        total += -number if number < previous else number
-        previous = number
-
-    return total
-
-
-def slugify(value):
-    value = value.lower()
-    value = re.sub(r"[^a-z0-9]+", "-", value)
-    return value.strip("-")
-
-
-class LinkParser(HTMLParser):
+class PageTitleParser(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
-        self.links = []
-        self.href = None
-        self.parts = []
-
-    def handle_starttag(self, tag, attrs):
-        if tag == "a":
-            self.href = dict(attrs).get("href")
-            self.parts = []
-
-    def handle_data(self, data):
-        if self.href is not None:
-            self.parts.append(data)
-
-    def handle_endtag(self, tag):
-        if tag == "a" and self.href is not None:
-            label = " ".join(" ".join(self.parts).split())
-
-            if label:
-                self.links.append((label, self.href))
-
-            self.href = None
-            self.parts = []
-
-
-class TitleParser(HTMLParser):
-    def __init__(self):
-        super().__init__(convert_charrefs=True)
-        self.in_title = False
+        self.active = False
         self.parts = []
 
     def handle_starttag(self, tag, attrs):
         if tag == "title":
-            self.in_title = True
+            self.active = True
 
     def handle_data(self, data):
-        if self.in_title:
+        if self.active:
             self.parts.append(data)
 
     def handle_endtag(self, tag):
         if tag == "title":
-            self.in_title = False
+            self.active = False
 
     @property
     def title(self):
         return " ".join(" ".join(self.parts).split())
 
 
-class ParagraphParser(HTMLParser):
-    """Extract paragraphs while excluding inline footnote markers."""
-
-    def __init__(self):
-        super().__init__(convert_charrefs=True)
-        self.in_p = False
-        self.skip_footnote_depth = 0
-        self.current = []
-        self.paragraphs = []
-
-    def handle_starttag(self, tag, attrs):
-        attrs = dict(attrs)
-
-        if self.skip_footnote_depth:
-            if tag == "sup":
-                self.skip_footnote_depth += 1
-            return
-
-        if tag == "sup" and "ftnt" in attrs.get("class", "").split():
-            self.skip_footnote_depth = 1
-            return
-
-        if tag == "p":
-            self.in_p = True
-            self.current = []
-
-        elif tag == "br" and self.in_p:
-            self.current.append("\n")
-
-    def handle_startendtag(self, tag, attrs):
-        self.handle_starttag(tag, attrs)
-
-        if tag == "br" and self.in_p and not self.skip_footnote_depth:
-            return
-
-        self.handle_endtag(tag)
-
-    def handle_data(self, data):
-        if self.in_p and not self.skip_footnote_depth:
-            self.current.append(data)
-
-    def handle_endtag(self, tag):
-        if self.skip_footnote_depth:
-            if tag == "sup":
-                self.skip_footnote_depth -= 1
-            return
-
-        if tag == "p" and self.in_p:
-            text = "".join(self.current).replace("\xa0", " ")
-
-            lines = [
-                line.strip()
-                for line in text.splitlines()
-                if line.strip()
-            ]
-
-            text = "\n".join(lines).strip()
-
-            if text and text != "\xa0":
-                self.paragraphs.append(text)
-
-            self.in_p = False
-            self.current = []
-
-
-def fetch(session, url):
-    response = session.get(url, timeout=30)
-    response.raise_for_status()
-    return response.text
-
-
-def same_source(url, source_url):
-    candidate = urlparse(url)
-    base = urlparse(source_url)
-
-    return (
-        candidate.scheme in ("http", "https")
-        and candidate.netloc == base.netloc
-        and candidate.path.startswith(base.path.rstrip("/") + "/")
-    )
-
-
-def get_page_title(html):
-    parser = TitleParser()
-    parser.feed(html)
-    return parser.title
-
-
-def discover_books(session, source_url):
-    html = fetch(session, source_url)
-    page_title = get_page_title(html)
-
-    parser = LinkParser()
-    parser.feed(html)
-
-    books = []
-    seen_urls = set()
-
-    for label, href in parser.links:
-        match = BOOK_RE.match(label)
-
-        if not match or not href:
-            continue
-
-        url = urljoin(source_url, href).split("#", 1)[0]
-
-        if not same_source(url, source_url) or url in seen_urls:
-            continue
-
-        seen_urls.add(url)
-        number = roman_to_int(match.group(1))
-
-        books.append(
-            {
-                "number": number,
-                "name": f"Book {match.group(1).upper()}",
-                "slug": f"book-{number}",
-                "url": url,
-            }
-        )
-
-    books.sort(key=lambda item: item["number"])
-
-    if not books:
-        raise RuntimeError(
-            "No book pages discovered. Refusing to continue."
-        )
-
-    return page_title, books
-
-
-def discover_chapters(session, source_url, book):
-    html = fetch(session, book["url"])
-
-    parser = LinkParser()
-    parser.feed(html)
-
-    chapters = []
-    seen_urls = set()
-
-    for label, href in parser.links:
-        match = CHAPTER_RE.match(label)
-
-        if not match or not href:
-            continue
-
-        url = urljoin(book["url"], href).split("#", 1)[0]
-
-        if not same_source(url, source_url) or url in seen_urls:
-            continue
-
-        seen_urls.add(url)
-        title = (match.group(2) or "").strip()
-
-        chapters.append(
-            {
-                "number": roman_to_int(match.group(1)),
-                "label": label,
-                "title": title or label,
-                "url": url,
-            }
-        )
-
-    # Chapter numbers can repeat or have gaps. Do not deduplicate by number.
-    chapters.sort(key=lambda item: item["url"])
-
-    if not chapters:
-        raise RuntimeError(
-            f"No chapter links found on {book['url']}"
-        )
-
-    return chapters
-
-
-class NarrativeContainerParser(HTMLParser):
-    """Extract narrative paragraphs only from the #scontent container."""
-
+class NarrativeParser(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self.active = False
         self.div_depth = 0
-        self.in_p = False
-        self.skip_ftnt = 0
+        self.in_paragraph = False
+        self.skip_footnote = 0
         self.current = []
         self.paragraphs = []
 
@@ -304,521 +76,357 @@ class NarrativeContainerParser(HTMLParser):
                 self.div_depth = 1
             return
 
-        # Stop before the explanatory footnotes section, if present.
         if tag == "section" and "footnotes" in (
             attrs.get("class") or ""
         ).split():
             self.active = False
-            self.in_p = False
+            self.in_paragraph = False
             self.current = []
             return
 
         if tag == "div":
             self.div_depth += 1
 
-        if self.skip_ftnt:
+        if self.skip_footnote:
             if tag == "sup":
-                self.skip_ftnt += 1
+                self.skip_footnote += 1
             return
 
         if tag == "sup" and "ftnt" in (
             attrs.get("class") or ""
         ).split():
-            self.skip_ftnt = 1
+            self.skip_footnote = 1
             return
 
         if tag == "p":
-            self.in_p = True
+            self.in_paragraph = True
             self.current = []
 
-        elif tag == "br" and self.in_p:
+        elif tag == "br" and self.in_paragraph:
             self.current.append("\n")
 
     def handle_startendtag(self, tag, attrs):
         self.handle_starttag(tag, attrs)
 
         if tag not in {
-            "br",
-            "img",
-            "hr",
-            "meta",
-            "link",
-            "input",
+            "br", "img", "hr", "meta", "link", "input"
         }:
             self.handle_endtag(tag)
 
     def handle_data(self, data):
-        if self.active and self.in_p and not self.skip_ftnt:
+        if self.active and self.in_paragraph and not self.skip_footnote:
             self.current.append(data)
 
     def handle_endtag(self, tag):
         if not self.active:
             return
 
-        if self.skip_ftnt:
+        if self.skip_footnote:
             if tag == "sup":
-                self.skip_ftnt -= 1
+                self.skip_footnote -= 1
             return
 
-        if tag == "p" and self.in_p:
+        if tag == "p" and self.in_paragraph:
             value = "".join(self.current).replace("\xa0", " ")
-
             lines = [
                 line.strip()
                 for line in value.splitlines()
                 if line.strip()
             ]
-
             value = "\n".join(lines).strip()
 
-            # Ignore formatting-only separators such as "* * * * *".
             if value and any(ch.isalnum() for ch in value):
                 self.paragraphs.append(value)
 
-            self.in_p = False
+            self.in_paragraph = False
             self.current = []
 
         if tag == "div":
             self.div_depth -= 1
-
-            if self.div_depth == 0:
+            if self.div_depth <= 0:
                 self.active = False
 
 
 def extract_narrative(html):
-    parser = NarrativeContainerParser()
+    parser = NarrativeParser()
     parser.feed(html)
     parser.close()
 
-    if not parser.active and not parser.paragraphs:
-        raise RuntimeError(
-            "No narrative paragraphs extracted from #scontent."
-        )
-
     if not parser.paragraphs:
-        raise RuntimeError("No narrative paragraphs extracted.")
+        raise RuntimeError(
+            "No narrative paragraphs found in #scontent."
+        )
 
     return parser.paragraphs
 
 
-def preview(session, source_url):
-    title, books = discover_books(session, source_url)
+def get_source_title(session, url):
+    html = fetch(session, url)
+    parser = PageTitleParser()
+    parser.feed(html)
 
-    print(f"\nSource title: {title or source_url}")
-    print(f"Source URL:   {source_url}")
-    print(f"Books found:  {len(books)}")
+    title = parser.title.strip()
+    title = re.sub(
+        r"\s*[-|]\s*Wisdom\s*Library\s*$",
+        "",
+        title,
+        flags=re.I,
+    ).strip()
 
-    total = 0
-    first_chapter = None
-
-    for book in books:
-        chapters = discover_chapters(session, source_url, book)
-        total += len(chapters)
-
-        print(f"\n{book['name']}: {len(chapters)} chapters")
-        print(f"  URL: {book['url']}")
-
-        for chapter in chapters[:2]:
-            print(
-                f"  Chapter {chapter['number']}: "
-                f"{chapter['title']} -> {chapter['url']}"
-            )
-
-        if first_chapter is None:
-            first_chapter = (book, chapters[0])
-
-    print(f"\nTotal chapter links: {total}")
-
-    if first_chapter:
-        book, chapter = first_chapter
-        html = fetch(session, chapter["url"])
-        paragraphs = extract_narrative(html)
-
-        print(f"\nSample chapter: {chapter['label']}")
-        print(f"Extracted narrative paragraphs: {len(paragraphs)}")
-
-        print("\nFirst 2 paragraphs:")
-        for paragraph in paragraphs[:2]:
-            print(" -", paragraph[:180])
-
-        print("\nLast paragraph preview:")
-        print(paragraphs[-1][:250])
-
-    print("\nPREVIEW ONLY: no database writes.")
-
-    return title, books
+    return title or url
 
 
-EXPECTED_CHAPTERS_PER_BOOK = {
-    1: 75,
-    2: 119,
-    3: 76,
-    4: 67,
-    5: 55,
-    6: 102,
-}
+def connect_database():
+    required = ["DB_NAME", "DB_USER", "DB_PASSWORD"]
+    missing = [
+        key for key in required
+        if not os.getenv(key)
+    ]
 
-
-def validate_all(session, source_url, books):
-    """Download and validate all chapters without accessing the database."""
-
-    if len(books) != 6:
+    if missing:
         raise RuntimeError(
-            f"Expected 6 books, discovered {len(books)}."
+            "Missing database settings in backend/.env: "
+            + ", ".join(missing)
         )
 
-    actual_book_numbers = sorted(book["number"] for book in books)
+    return psycopg2.connect(
+        dbname=os.getenv("DB_NAME"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+        host=os.getenv("DB_HOST", "localhost"),
+        port=os.getenv("DB_PORT", "5432"),
+        connect_timeout=10,
+    )
 
-    if actual_book_numbers != [1, 2, 3, 4, 5, 6]:
-        raise RuntimeError(
-            f"Unexpected book numbers: {actual_book_numbers}"
-        )
 
+def build_payload(session, source_url, sections):
     payload = []
-    all_urls = set()
+    seen_urls = set()
 
-    print("\nVALIDATION ONLY: downloading all chapter pages.")
-    print("No database connection will be opened.\n")
+    total = sum(len(chapters) for _, chapters in sections)
+    print(f"\nDownloading {total} chapter pages...")
 
-    for book in books:
-        chapters = discover_chapters(session, source_url, book)
-        expected = EXPECTED_CHAPTERS_PER_BOOK[book["number"]]
-
-        if len(chapters) != expected:
-            raise RuntimeError(
-                f"{book['name']}: expected {expected} chapters, "
-                f"discovered {len(chapters)}."
-            )
-
-        print(
-            f"{book['name']}: {len(chapters)} chapter links verified."
-        )
-
+    for section, chapters in sections:
         for chapter in chapters:
             url = chapter["url"]
 
-            if url in all_urls:
-                raise RuntimeError(f"Duplicate chapter URL: {url}")
+            if url in seen_urls:
+                raise RuntimeError(
+                    f"Duplicate chapter URL discovered: {url}"
+                )
 
-            all_urls.add(url)
+            seen_urls.add(url)
 
             last_error = None
             paragraphs = None
 
-            # Retry transient fetch or parsing failures up to 3 times.
             for attempt in range(1, 4):
                 try:
                     html = fetch(session, url)
+
+                    if len(html) > MAX_CHAPTER_SIZE:
+                        raise RuntimeError(
+                            f"Page exceeds size limit: {url}"
+                        )
+
                     paragraphs = extract_narrative(html)
                     last_error = None
                     break
 
                 except Exception as exc:
                     last_error = exc
-
                     if attempt < 3:
-                        print(
-                            f"\nRetry {attempt + 1}/3 for {url} "
-                            f"after: {exc}",
-                            flush=True,
-                        )
-                        time.sleep(1.0 * attempt)
+                        time.sleep(attempt)
 
-            if last_error is not None or not paragraphs:
+            if last_error is not None:
                 raise RuntimeError(
-                    f"Failed to validate chapter {url} after 3 attempts: "
-                    f"{last_error or 'no narrative paragraphs extracted'}"
+                    f"Could not extract {url}: {last_error}"
                 ) from last_error
 
-            if not paragraphs or any(
-                not isinstance(p, str) or not p.strip()
-                for p in paragraphs
-            ):
+            if not paragraphs:
                 raise RuntimeError(
-                    f"Empty or invalid paragraphs in chapter: {url}"
+                    f"No paragraphs extracted from {url}"
                 )
 
-            payload.append((chapter, paragraphs))
+            content = "\n\n".join(paragraphs)
+
+            payload.append({
+                "section": section,
+                "chapter": chapter,
+                "paragraphs": paragraphs,
+                "content": content,
+            })
 
             print(
-                f"\rValidated {len(payload)}/494 chapters...",
+                f"\rValidated {len(payload)}/{total} pages",
                 end="",
                 flush=True,
             )
 
-            time.sleep(0.12)
+            time.sleep(REQUEST_DELAY)
 
     print()
 
-    if len(payload) != 494:
-        raise RuntimeError(
-            f"Expected 494 chapters, validated {len(payload)}."
-        )
+    if not payload:
+        raise RuntimeError("Discovery produced no chapter pages.")
 
-    print("\nFULL VALIDATION PASSED")
-    print("Books: 6")
-    print(f"Chapters: {len(payload)}")
-    print(f"Unique chapter URLs: {len(all_urls)}")
-    print(f"Chapters with non-empty narrative: {len(payload)}")
-    print("Database: not connected; no writes performed.")
+    if len(seen_urls) != len(payload):
+        raise RuntimeError("Chapter URL validation failed.")
+
+    return payload
 
 
-def connect_database():
-    import psycopg2
+def inspect_database(connection, source_url, payload):
+    report = {
+        "source_id": None,
+        "source_exists": False,
+        "new_books": 0,
+        "existing_books": 0,
+        "new_chapters": 0,
+        "updated_chapters": 0,
+        "unchanged_chapters": 0,
+        "new_paragraphs": 0,
+        "updated_paragraphs": 0,
+        "unchanged_paragraphs": 0,
+        "stale_chapters": 0,
+    }
 
-    password = (
-        os.environ.get("DB_PASSWORD")
-        or os.environ.get("PGPASSWORD")
-    )
-
-    if not password:
-        password = getpass.getpass(
-            "PostgreSQL password for project_se: "
-        )
-
-    return psycopg2.connect(
-        host=os.environ.get("DB_HOST", "localhost"),
-        port=os.environ.get("DB_PORT", "5432"),
-        dbname=os.environ.get("DB_NAME", "postgres"),
-        user=os.environ.get("DB_USER", "project_se"),
-        password=password,
-    )
-
-
-def import_source(connection, session, source_url, title, books):
-    # Download and parse everything before opening the database transaction.
-    print("\nDownloading and parsing all chapter pages...")
-    payload = []
-
-    for book in books:
-        chapters = discover_chapters(session, source_url, book)
-
-        for chapter in chapters:
-            try:
-                html = fetch(session, chapter["url"])
-                paragraphs = extract_narrative(html)
-
-            except Exception:
-                print(f"\nFAILED chapter URL: {chapter.get('url')}")
-                print(f"Chapter metadata: {chapter!r}")
-                print(f"Book metadata: {book!r}")
-                raise
-
-            payload.append(
-                {
-                    "book": book,
-                    "chapter": chapter,
-                    "paragraphs": paragraphs,
-                }
-            )
-
-            print(
-                f"\rParsed {len(payload)} chapters...",
-                end="",
-                flush=True,
-            )
-
-            time.sleep(0.12)
-
-    print(f"\nParsed {len(payload)} chapters successfully.")
-
-    # Validate the complete payload before issuing any database writes.
-    if len(books) != 6:
-        raise RuntimeError(
-            f"Expected 6 books, discovered {len(books)}. "
-            "Refusing database writes."
-        )
-
-    if len(payload) != 494:
-        raise RuntimeError(
-            f"Expected 494 chapters, extracted {len(payload)}. "
-            "Refusing database writes."
-        )
-
-    chapter_urls = [
-        item["chapter"]["url"]
-        for item in payload
-    ]
-
-    if len(chapter_urls) != len(set(chapter_urls)):
-        raise RuntimeError(
-            "Duplicate chapter URLs found in extracted payload. "
-            "Refusing database writes."
-        )
-
-    for item in payload:
-        paragraphs = item["paragraphs"]
-        chapter_url = item["chapter"]["url"]
-
-        if not paragraphs or any(
-            not isinstance(paragraph, str) or not paragraph.strip()
-            for paragraph in paragraphs
-        ):
-            raise RuntimeError(
-                f"Empty or invalid paragraph in {chapter_url}. "
-                "Refusing database writes."
-            )
-
-    print(
-        "Validation passed: 6 books, 494 chapters, unique chapter URLs, "
-        "and non-empty paragraphs."
-    )
-
-    with connection.cursor() as cursor:
-        # Prevent simultaneous runs for this exact source URL.
-        cursor.execute(
-            "SELECT pg_advisory_xact_lock(hashtext(%s))",
-            (source_url,),
-        )
-
-        cursor.execute(
+    with connection.cursor() as cur:
+        cur.execute(
             "SELECT id FROM sources WHERE url = %s ORDER BY id",
             (source_url,),
         )
-
-        source_rows = cursor.fetchall()
+        source_rows = cur.fetchall()
 
         if len(source_rows) > 1:
             raise RuntimeError(
-                "Multiple source rows use this URL. Resolve duplicates first."
+                "Multiple sources already use this URL. "
+                "Resolve duplicates before importing."
             )
 
-        if source_rows:
-            source_id = source_rows[0][0]
+        source_id = source_rows[0][0] if source_rows else None
+        report["source_id"] = source_id
+        report["source_exists"] = source_id is not None
 
-        else:
-            cursor.execute(
+        if source_id is None:
+            chapter_urls = [
+                item["chapter"]["url"] for item in payload
+            ]
+
+            cur.execute(
                 """
-                INSERT INTO sources
-                    (title, author, translator, year, language, url)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                RETURNING id
+                SELECT
+                    c.source_url,
+                    c.id,
+                    c.title,
+                    s.id,
+                    s.title
+                FROM chapters c
+                JOIN books b ON b.id = c.book_id
+                JOIN sources s ON s.id = b.source_id
+                WHERE c.source_url = ANY(%s)
+                ORDER BY c.source_url
                 """,
-                (
-                    title or "Ramayana of Valmiki (Griffith)",
-                    "Valmiki",
-                    "Griffith",
-                    None,
-                    "English",
-                    source_url,
-                ),
+                (chapter_urls,),
             )
 
-            source_id = cursor.fetchone()[0]
+            collisions = cur.fetchall()
 
-        book_ids = {}
+            if collisions:
+                details = "\n".join(
+                    f"  {row[0]} | chapter_id={row[1]} "
+                    f"| {row[2]} | source_id={row[3]} "
+                    f"| {row[4]}"
+                    for row in collisions
+                )
 
-        for book in books:
-            cursor.execute(
-                """
-                SELECT id
-                FROM books
-                WHERE source_id = %s AND book_number = %s
-                ORDER BY id
-                """,
-                (source_id, book["number"]),
-            )
-
-            rows = cursor.fetchall()
-
-            if len(rows) > 1:
                 raise RuntimeError(
-                    f"Duplicate book number {book['number']} "
-                    "exists for this source."
+                    "New source contains chapter URLs already "
+                    "registered in another source:\n" + details
                 )
 
-            if rows:
-                book_id = rows[0][0]
+            report["new_books"] = len({
+                item["section"]["number"] for item in payload
+            })
+            report["new_chapters"] = len(payload)
+            report["new_paragraphs"] = sum(
+                len(item["paragraphs"]) for item in payload
+            )
+            return report
 
-            else:
-                cursor.execute(
-                    """
-                    INSERT INTO books
-                        (source_id, book_number, name, slug)
-                    VALUES (%s, %s, %s, %s)
-                    RETURNING id
-                    """,
-                    (
-                        source_id,
-                        book["number"],
-                        book["name"],
-                        book["slug"],
-                    ),
-                )
+        cur.execute(
+            """
+            SELECT id, book_number, name
+            FROM books
+            WHERE source_id = %s
+            """,
+            (source_id,),
+        )
 
-                book_id = cursor.fetchone()[0]
+        existing_books = {
+            row[1]: {"id": row[0], "name": row[2]}
+            for row in cur.fetchall()
+        }
 
-            book_ids[book["number"]] = book_id
-
-        new_chapters = 0
-        preserved_chapters = 0
-        new_paragraphs = 0
-        preserved_paragraph_sets = 0
+        discovered_book_numbers = set()
 
         for item in payload:
-            book = item["book"]
+            section = item["section"]
             chapter = item["chapter"]
             paragraphs = item["paragraphs"]
 
-            book_id = book_ids[book["number"]]
-            content = "\n\n".join(paragraphs)
+            book_number = section["number"]
+            discovered_book_numbers.add(book_number)
 
-            cursor.execute(
+            existing_book = existing_books.get(book_number)
+
+            if existing_book is None:
+                report["new_books"] += 1
+                report["new_chapters"] += 1
+                report["new_paragraphs"] += len(paragraphs)
+                continue
+
+            cur.execute(
                 """
-                SELECT id, book_id, content
+                SELECT id, book_id, chapter_number, title, content
                 FROM chapters
                 WHERE source_url = %s
                 ORDER BY id
                 """,
                 (chapter["url"],),
             )
-
-            rows = cursor.fetchall()
+            rows = cur.fetchall()
 
             if len(rows) > 1:
                 raise RuntimeError(
                     f"Duplicate chapter URL in database: {chapter['url']}"
                 )
 
-            if rows:
-                chapter_id, existing_book_id, existing_content = rows[0]
+            if not rows:
+                report["new_chapters"] += 1
+                report["new_paragraphs"] += len(paragraphs)
+                continue
 
-                if existing_book_id != book_id:
-                    raise RuntimeError(
-                        "Chapter URL already belongs to another book: "
-                        + chapter["url"]
-                    )
+            chapter_id, old_book_id, old_number, old_title, old_content = rows[0]
 
-                preserved_chapters += 1
-
-                # Never overwrite non-empty chapter content.
-                if not existing_content or not existing_content.strip():
-                    cursor.execute(
-                        "UPDATE chapters SET content = %s WHERE id = %s",
-                        (content, chapter_id),
-                    )
-
-            else:
-                cursor.execute(
-                    """
-                    INSERT INTO chapters
-                        (book_id, chapter_number, title, source_url, content)
-                    VALUES (%s, %s, %s, %s, %s)
-                    RETURNING id
-                    """,
-                    (
-                        book_id,
-                        chapter["number"],
-                        chapter["title"],
-                        chapter["url"],
-                        content,
-                    ),
+            if old_book_id != existing_book["id"]:
+                raise RuntimeError(
+                    "Chapter URL is already assigned to a different book: "
+                    + chapter["url"]
                 )
 
-                chapter_id = cursor.fetchone()[0]
-                new_chapters += 1
+            changed = (
+                old_number != chapter["number"]
+                or normalize_title(old_title) != normalize_title(chapter["title"])
+                or old_content != item["content"]
+            )
 
-            cursor.execute(
+            if changed:
+                report["updated_chapters"] += 1
+            else:
+                report["unchanged_chapters"] += 1
+
+            cur.execute(
                 """
                 SELECT COUNT(*)
                 FROM chapter_paragraphs
@@ -826,92 +434,426 @@ def import_source(connection, session, source_url, title, books):
                 """,
                 (chapter_id,),
             )
+            existing_count = cur.fetchone()[0]
 
-            existing_count = cursor.fetchone()[0]
+            if changed:
+                report["updated_paragraphs"] += len(paragraphs)
+            elif existing_count == 0:
+                report["new_paragraphs"] += len(paragraphs)
+            else:
+                report["unchanged_paragraphs"] += existing_count
 
-            if existing_count:
-                # Preserve existing paragraph rows; never silently replace them.
-                preserved_paragraph_sets += 1
-                continue
+        report["existing_books"] = len(existing_books)
+        report["stale_chapters"] = 0
 
-            for paragraph_number, paragraph in enumerate(paragraphs, 1):
-                cursor.execute(
+    return report
+
+
+def apply_import(
+    connection,
+    source_url,
+    source_title,
+    author,
+    translator,
+    year,
+    language,
+    sections,
+    payload,
+):
+    counts = {
+        "new_books": 0,
+        "new_chapters": 0,
+        "updated_chapters": 0,
+        "unchanged_chapters": 0,
+        "paragraphs_written": 0,
+    }
+
+    with connection:
+        with connection.cursor() as cur:
+            cur.execute(
+                "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                (source_url,),
+            )
+
+            cur.execute(
+                "SELECT id FROM sources WHERE url = %s ORDER BY id",
+                (source_url,),
+            )
+            source_rows = cur.fetchall()
+
+            if len(source_rows) > 1:
+                raise RuntimeError(
+                    "Duplicate source URLs exist in the database."
+                )
+
+            if source_rows:
+                source_id = source_rows[0][0]
+
+                cur.execute(
+                    """
+                    UPDATE sources
+                    SET title = %s,
+                        author = COALESCE(%s, author),
+                        translator = COALESCE(%s, translator),
+                        year = COALESCE(%s, year),
+                        language = COALESCE(%s, language)
+                    WHERE id = %s
+                    """,
+                    (
+                        source_title,
+                        author,
+                        translator,
+                        year,
+                        language,
+                        source_id,
+                    ),
+                )
+            else:
+                cur.execute(
+                    """
+                    INSERT INTO sources
+                        (title, author, translator, year, language, url)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                    """,
+                    (
+                        source_title,
+                        author,
+                        translator,
+                        year,
+                        language,
+                        source_url,
+                    ),
+                )
+                source_id = cur.fetchone()[0]
+
+            book_ids = {}
+
+            for section, _ in sections:
+                number = section["number"]
+
+                if number in book_ids:
+                    continue
+
+                name = section["label"]
+                slug = re.sub(
+                    r"[^a-z0-9]+",
+                    "-",
+                    name.lower(),
+                ).strip("-") or f"section-{number}"
+
+                cur.execute(
+                    """
+                    SELECT id
+                    FROM books
+                    WHERE source_id = %s AND book_number = %s
+                    ORDER BY id
+                    """,
+                    (source_id, number),
+                )
+                rows = cur.fetchall()
+
+                if len(rows) > 1:
+                    raise RuntimeError(
+                        f"Duplicate book number {number} for source {source_id}"
+                    )
+
+                if rows:
+                    book_id = rows[0][0]
+                    cur.execute(
+                        """
+                        UPDATE books
+                        SET name = %s, slug = %s
+                        WHERE id = %s
+                        """,
+                        (name, slug, book_id),
+                    )
+                else:
+                    cur.execute(
+                        """
+                        INSERT INTO books
+                            (source_id, book_number, name, slug)
+                        VALUES (%s, %s, %s, %s)
+                        RETURNING id
+                        """,
+                        (source_id, number, name, slug),
+                    )
+                    book_id = cur.fetchone()[0]
+                    counts["new_books"] += 1
+
+                book_ids[number] = book_id
+
+            for item in payload:
+                section = item["section"]
+                chapter = item["chapter"]
+                paragraphs = item["paragraphs"]
+                content = item["content"]
+
+                book_id = book_ids[section["number"]]
+
+                cur.execute(
+                    """
+                    SELECT id, book_id, chapter_number, title, content
+                    FROM chapters
+                    WHERE source_url = %s
+                    ORDER BY id
+                    """,
+                    (chapter["url"],),
+                )
+                rows = cur.fetchall()
+
+                if len(rows) > 1:
+                    raise RuntimeError(
+                        f"Duplicate chapter URL: {chapter['url']}"
+                    )
+
+                if rows:
+                    chapter_id, old_book_id, old_number, old_title, old_content = rows[0]
+
+                    if old_book_id != book_id:
+                        raise RuntimeError(
+                            "Chapter URL belongs to another book: "
+                            + chapter["url"]
+                        )
+
+                    metadata_changed = (
+                        old_number != chapter["number"]
+                        or normalize_title(old_title)
+                        != normalize_title(chapter["title"])
+                    )
+                    content_changed = old_content != content
+
+                    if metadata_changed or content_changed:
+                        cur.execute(
+                            """
+                            UPDATE chapters
+                            SET chapter_number = %s,
+                                title = %s,
+                                content = %s
+                            WHERE id = %s
+                            """,
+                            (
+                                chapter["number"],
+                                chapter["title"],
+                                content,
+                                chapter_id,
+                            ),
+                        )
+                        counts["updated_chapters"] += 1
+                    else:
+                        counts["unchanged_chapters"] += 1
+
+                    cur.execute(
+                        """
+                        SELECT paragraph_number, content
+                        FROM chapter_paragraphs
+                        WHERE chapter_id = %s
+                        ORDER BY paragraph_number
+                        """,
+                        (chapter_id,),
+                    )
+                    old_paragraphs = cur.fetchall()
+
+                    expected_paragraphs = list(enumerate(paragraphs, 1))
+                    paragraph_rows_match = (
+                        old_paragraphs == expected_paragraphs
+                    )
+
+                    # Preserve existing paragraph rows whenever their content
+                    # already matches. Metadata-only chapter changes must not
+                    # invalidate paragraph IDs or downstream annotations.
+                    if paragraph_rows_match:
+                        continue
+
+                    # Replacing paragraphs can make paragraph-number and text
+                    # offsets stored by downstream annotations incorrect.
+                    # Abort the whole transaction if annotations already exist.
+                    cur.execute(
+                        """
+                        SELECT
+                            (SELECT COUNT(*) FROM character_mentions
+                             WHERE chapter_id = %s),
+                            (SELECT COUNT(*) FROM character_events
+                             WHERE chapter_id = %s),
+                            (SELECT COUNT(*) FROM entity_resolution_results
+                             WHERE chapter_id = %s)
+                        """,
+                        (chapter_id, chapter_id, chapter_id),
+                    )
+                    mention_count, event_count, resolution_count = cur.fetchone()
+
+                    if mention_count or event_count or resolution_count:
+                        raise RuntimeError(
+                            f"Refusing to replace paragraphs for chapter {chapter_id}: "
+                            f"{mention_count} mentions, {event_count} events, "
+                            f"{resolution_count} resolution results exist. "
+                            "Reprocess annotations explicitly before updating."
+                        )
+
+                    # No downstream annotations depend on these paragraphs, so
+                    # replacement is safe within this transaction.
+                    if old_paragraphs:
+                        cur.execute(
+                            """
+                            DELETE FROM chapter_paragraphs
+                            WHERE chapter_id = %s
+                            """,
+                            (chapter_id,),
+                        )
+
+                    cur.executemany(
+                        """
+                        INSERT INTO chapter_paragraphs
+                            (chapter_id, paragraph_number, content)
+                        VALUES (%s, %s, %s)
+                        """,
+                        [
+                            (chapter_id, number, paragraph)
+                            for number, paragraph in enumerate(paragraphs, 1)
+                        ],
+                    )
+                    counts["paragraphs_written"] += len(paragraphs)
+                    continue
+
+                else:
+                    cur.execute(
+                        """
+                        INSERT INTO chapters
+                            (book_id, chapter_number, title, source_url, content)
+                        VALUES (%s, %s, %s, %s, %s)
+                        RETURNING id
+                        """,
+                        (
+                            book_id,
+                            chapter["number"],
+                            chapter["title"],
+                            chapter["url"],
+                            content,
+                        ),
+                    )
+                    chapter_id = cur.fetchone()[0]
+                    counts["new_chapters"] += 1
+
+                cur.executemany(
                     """
                     INSERT INTO chapter_paragraphs
                         (chapter_id, paragraph_number, content)
                     VALUES (%s, %s, %s)
-                    ON CONFLICT (chapter_id, paragraph_number) DO NOTHING
                     """,
-                    (chapter_id, paragraph_number, paragraph),
+                    [
+                        (chapter_id, number, paragraph)
+                        for number, paragraph in enumerate(paragraphs, 1)
+                    ],
                 )
+                counts["paragraphs_written"] += len(paragraphs)
 
-                new_paragraphs += cursor.rowcount
-
-    connection.commit()
-
-    print("\nImport completed.")
-    print("Source ID:", source_id)
-    print("New chapters:", new_chapters)
-    print("Existing chapters preserved:", preserved_chapters)
-    print("New paragraph rows:", new_paragraphs)
-    print(
-        "Chapters with existing paragraphs preserved:",
-        preserved_paragraph_sets,
-    )
+    return source_id, counts
 
 
 def main():
     parser = argparse.ArgumentParser(
         description="Generic WisdomLib source importer"
     )
-
-    parser.add_argument(
-        "--url",
-        default=DEFAULT_URL,
-        help="WisdomLib book/source index URL",
-    )
-
-    parser.add_argument(
-        "--apply",
-        action="store_true",
-        help="Write imported content to PostgreSQL",
-    )
-
-    parser.add_argument(
-        "--validate-all",
-        action="store_true",
-        help="Download and validate every chapter without database access",
-    )
-
+    parser.add_argument("--url", required=True)
+    parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--author")
+    parser.add_argument("--translator")
+    parser.add_argument("--year", type=int)
+    parser.add_argument("--language", default="English")
     args = parser.parse_args()
 
     source_url = args.url.rstrip("/")
+    parsed = urlparse(source_url)
+
+    if (
+        parsed.scheme not in ("http", "https")
+        or not parsed.netloc
+        or parsed.netloc.lower() != "www.wisdomlib.org"
+    ):
+        parser.error("--url must be a valid WisdomLib URL.")
+
     session = requests.Session()
     session.headers.update(HEADERS)
 
-    title, books = preview(session, source_url)
-
-    if args.validate_all:
-        validate_all(session, source_url, books)
-        return
-
-    if not args.apply:
-        return
-
-    print("\n--apply enabled: database writes are enabled.")
-    print("The importer will preserve existing non-empty content.")
-
-    connection = connect_database()
-
     try:
-        import_source(connection, session, source_url, title, books)
+        print("=" * 68)
+        print("GENERIC WISDOMLIB IMPORTER")
+        print("=" * 68)
+        print("Source:", source_url)
 
-    except Exception:
-        connection.rollback()
-        raise
+        source_title = get_source_title(session, source_url)
+        sections = discover(session, source_url)
 
-    finally:
-        connection.close()
+        print("\nDiscovered sections:", len(sections))
+        for section, chapters in sections:
+            print(
+                f"  {section['label']}: "
+                f"{len(chapters)} chapter/page links"
+            )
+
+        payload = build_payload(session, source_url, sections)
+
+        print("\nSource title:", source_title)
+        print("Total validated chapter pages:", len(payload))
+        print(
+            "Total narrative paragraphs:",
+            sum(len(item["paragraphs"]) for item in payload),
+        )
+
+        connection = connect_database()
+
+        try:
+            report = inspect_database(
+                connection,
+                source_url,
+                payload,
+            )
+
+            print("\nDATABASE COMPARISON")
+            print("-" * 48)
+            print("Existing source:", report["source_exists"])
+            print("Source ID:", report["source_id"])
+            print("New books:", report["new_books"])
+            print("Existing books:", report["existing_books"])
+            print("New chapters:", report["new_chapters"])
+            print("Updated chapters:", report["updated_chapters"])
+            print("Unchanged chapters:", report["unchanged_chapters"])
+            print("New paragraph rows:", report["new_paragraphs"])
+            print("Updated paragraph rows:", report["updated_paragraphs"])
+            print("Unchanged paragraph rows:", report["unchanged_paragraphs"])
+            print("Stale chapters: not deleted")
+
+            if not args.apply:
+                print("\nDRY RUN COMPLETE.")
+                print("No database writes were performed.")
+                print("Review the counts before using --apply.")
+                return
+
+            print("\n--apply enabled. Starting database transaction.")
+
+            source_id, counts = apply_import(
+                connection,
+                source_url,
+                source_title,
+                args.author,
+                args.translator,
+                args.year,
+                args.language,
+                sections,
+                payload,
+            )
+
+            print("\nIMPORT COMMITTED")
+            print("Source ID:", source_id)
+            for key, value in counts.items():
+                print(f"{key}: {value}")
+
+        finally:
+            connection.close()
+
+    except Exception as exc:
+        print(f"\nIMPORT FAILED: {exc}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
