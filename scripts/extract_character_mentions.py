@@ -1,4 +1,5 @@
 
+import argparse
 import os
 import re
 import sys
@@ -76,6 +77,21 @@ def is_likely_non_character_mention(paragraph, alias, character_id, match):
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Extract character mentions from source paragraphs."
+    )
+    parser.add_argument(
+        "--source-id",
+        type=int,
+        help="Process only the specified source ID."
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Count new mentions without inserting them."
+    )
+    args = parser.parse_args()
+
     conn = None
     cur = None
 
@@ -108,7 +124,7 @@ def main():
 
         print(f"Aliases loaded: {len(aliases)}")
 
-        # Load paragraphs from every source in the database.
+        # Load paragraphs, optionally filtering by source ID.
         cur.execute("""
             SELECT
                 s.id AS source_id,
@@ -122,12 +138,13 @@ def main():
             JOIN books b ON b.source_id = s.id
             JOIN chapters ch ON ch.book_id = b.id
             JOIN chapter_paragraphs cp ON cp.chapter_id = ch.id
+            WHERE (%s::INTEGER IS NULL OR s.id = %s)
             ORDER BY
                 s.id,
                 b.book_number,
                 ch.chapter_number,
                 cp.paragraph_number;
-        """)
+        """, (args.source_id, args.source_id))
 
         paragraph_rows = cur.fetchall()
 
@@ -207,7 +224,14 @@ def main():
                     if key in existing_keys:
                         continue
 
-                    cur.execute("""
+                    # Dry-run: count without inserting into PostgreSQL.
+                    if args.dry_run:
+                        existing_keys.add(key)
+                        inserted_by_source[source_id] += 1
+                        continue
+
+                    cur.execute(
+                        """
                         INSERT INTO character_mentions (
                             character_id,
                             alias_id,
@@ -218,25 +242,34 @@ def main():
                             end_position
                         )
                         VALUES (%s, %s, %s, %s, %s, %s, %s);
-                    """, (
-                        character_id,
-                        alias_id,
-                        chapter_id,
-                        paragraph_number,
-                        match.group(),
-                        match.start(),
-                        match.end(),
-                    ))
+                        """,
+                        (
+                            character_id,
+                            alias_id,
+                            chapter_id,
+                            paragraph_number,
+                            match.group(),
+                            match.start(),
+                            match.end(),
+                        ),
+                    )
 
                     existing_keys.add(key)
                     inserted_by_source[source_id] += 1
 
         # One transaction for the complete extraction run.
-        conn.commit()
+        if args.dry_run:
+            conn.rollback()
+        else:
+            conn.commit()
 
         print()
         print("=" * 64)
-        print("EXTRACTION COMPLETE")
+        print(
+            "DRY RUN COMPLETE"
+            if args.dry_run
+            else "EXTRACTION COMPLETE"
+        )
         print("=" * 64)
 
         cur.execute("""
@@ -252,13 +285,20 @@ def main():
                 "  Chapters processed: "
                 f"{len(processed_chapters_by_source[source_id])}"
             )
-            print(
-                "  New mentions inserted: "
-                f"{inserted_by_source[source_id]}"
+            label = (
+                "  Mentions that would be inserted: "
+                if args.dry_run
+                else "  New mentions inserted: "
             )
+            print(label + str(inserted_by_source[source_id]))
 
         print("=" * 64)
-        print(f"Total new mentions: {sum(inserted_by_source.values())}")
+        total_label = (
+            "Total mentions that would be inserted"
+            if args.dry_run
+            else "Total new mentions inserted"
+        )
+        print(f"{total_label}: {sum(inserted_by_source.values())}")
         print("=" * 64)
 
     except Exception:
