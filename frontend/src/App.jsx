@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import ForceGraph2D from 'react-force-graph-2d'
 
-const API_URL = 'http://127.0.0.1:8000'
+const API_URL = import.meta.env.VITE_API_BASE_URL || 'https://mythverse-backend-254f.onrender.com'
 
 function App() {
   const [characters, setCharacters] = useState([])
