@@ -69,3 +69,15 @@ frontend_backup/
 *.dump
 data/ramayana.sql
 data/*_backup.sql
+
+# Virtual environments
+.venv
+backend/.venv
+venv/
+backend/venv/
+
+# Backup dumps and temporary scratch files
+backups/
+*.dump
+*.before-*
+*.old

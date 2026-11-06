@@ -44,32 +44,32 @@ VALUES
     (1, 8, 'brother'),
     (8, 1, 'brother'),
 
-    (1, 4, 'son'),
-    (4, 1, 'father'),
+    (1, 4, 'father'),
+    (4, 1, 'son'),
 
-    (1, 9, 'son'),
-    (9, 1, 'mother'),
+    (1, 9, 'mother'),
+    (9, 1, 'son'),
 
-    (1, 10, 'stepson'),
-    (10, 1, 'stepmother'),
+    (1, 10, 'stepmother'),
+    (10, 1, 'stepson'),
 
     (1, 13, 'student'),
     (13, 1, 'mentor'),
 
-    (2, 12, 'daughter'),
-    (12, 2, 'father'),
+    (2, 12, 'father'),
+    (12, 2, 'daughter'),
 
     (2, 3, 'sister-in-law'),
     (3, 2, 'sister-in-law'),
 
-    (2, 4, 'daughter-in-law'),
+    (2, 4, 'father-in-law'),
     (4, 2, 'daughter-in-law'),
 
-    (3, 4, 'son'),
-    (4, 3, 'father'),
+    (3, 4, 'father'),
+    (4, 3, 'son'),
 
-    (3, 11, 'son'),
-    (11, 3, 'mother'),
+    (3, 11, 'mother'),
+    (11, 3, 'son'),
 
     (3, 7, 'brother'),
     (7, 3, 'brother'),
@@ -77,17 +77,15 @@ VALUES
     (3, 8, 'brother'),
     (8, 3, 'brother'),
 
-    (7, 4, 'son'),
-    (4, 7, 'father'),
+    (7, 4, 'father'),
+    (4, 7, 'son'),
 
-    (8, 4, 'son'),
-    (4, 8, 'father'),
+    (8, 4, 'father'),
+    (4, 8, 'son'),
 
-    (7, 10, 'son'),
-    (10, 7, 'mother'),
+    (7, 10, 'mother'),
+    (10, 7, 'son'),
 
-    (8, 10, 'son'),
-    (10, 8, 'mother'),
 
     (4, 9, 'spouse'),
     (9, 4, 'spouse'),
@@ -105,5 +103,7 @@ VALUES
     (11, 9, 'co-wife'),
 
     (10, 11, 'co-wife'),
-    (11, 10, 'co-wife')
+    (11, 10, 'co-wife'),
+    (8, 11, 'mother'),
+    (11, 8, 'son')
 ON CONFLICT DO NOTHING;

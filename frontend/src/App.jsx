@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
+import ForceGraph2D from 'react-force-graph-2d'
 
 const API_URL = 'http://127.0.0.1:8000'
 
@@ -20,6 +21,14 @@ function App() {
   const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
+  const [graphData, setGraphData] = useState({ nodes: [], links: [] })
+
+  useEffect(() => {
+    fetch(`${API_URL}/graph`)
+      .then(res => res.json())
+      .then(data => setGraphData(data))
+      .catch(err => console.error('Failed to fetch graph data:', err))
+  }, [])
 
   // ------------------------------------------------------------
   // LOAD CHARACTERS FROM YOUR EXISTING FASTAPI BACKEND
@@ -63,8 +72,8 @@ function App() {
   // OPEN CHARACTER
   // ------------------------------------------------------------
 
-  const openCharacter = async (character, requestedSourceId = selectedSourceId) => {
-    const sourceId = requestedSourceId ?? sources[0]?.id ?? null
+  const openCharacter = async (character, requestedSourceId = selectedSourceId, isExplicitSourceChange = false) => {
+    let sourceId = requestedSourceId ?? sources[0]?.id ?? null
 
     setSelectedCharacter(character)
     if (sourceId !== null) setSelectedSourceId(Number(sourceId))
@@ -80,9 +89,6 @@ function App() {
     setLoadingStory(true)
     setModalOpen(true)
 
-    // Load story and mentions for the same selected source.
-    loadCharacterMentions(character.id, 0, sourceId)
-
     try {
       const sourceQuery = sourceId !== null ? `?source_id=${sourceId}` : ''
       const response = await fetch(
@@ -93,8 +99,32 @@ function App() {
         throw new Error('Failed to fetch character story')
       }
 
-      const data = await response.json()
+      let data = await response.json()
+
+      // If opening a character (not manually switching source) and current source has 0 mentions,
+      // automatically switch to the first source that has mentions for this character.
+      const counts = data.source_mention_counts || {}
+      if (
+        !isExplicitSourceChange &&
+        sourceId !== null &&
+        (counts[String(sourceId)] || 0) === 0 &&
+        Object.keys(counts).length > 0
+      ) {
+        const bestSource = sources.find((s) => (counts[String(s.id)] || 0) > 0)
+        if (bestSource) {
+          sourceId = bestSource.id
+          setSelectedSourceId(Number(sourceId))
+          const retryRes = await fetch(
+            `${API_URL}/characters/${character.id}/story?source_id=${sourceId}`,
+          )
+          if (retryRes.ok) {
+            data = await retryRes.json()
+          }
+        }
+      }
+
       setStory(data)
+      loadCharacterMentions(character.id, 0, sourceId)
     } catch (err) {
       console.error(err)
       setError('Could not load this character.')
@@ -141,15 +171,7 @@ function App() {
     const sourceId = Number(value)
     if (!Number.isFinite(sourceId)) return
     setSelectedSourceId(sourceId)
-    if (selectedCharacter) openCharacter(selectedCharacter, sourceId)
-  }
-
-  const openCharacterByName = (name) => {
-    const character = characters.find((item) => item.name === name)
-
-    if (character) {
-      openCharacter(character)
-    }
+    if (selectedCharacter) openCharacter(selectedCharacter, sourceId, true)
   }
 
   const closeModal = () => {
@@ -171,8 +193,23 @@ function App() {
     openCharacter(characters[nextIndex])
   }
 
+
+  // ------------------------------------------------------------
+  // AVATAR GENERATION
+  // ------------------------------------------------------------
+  const getGradient = (name) => {
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const h1 = Math.abs(hash) % 360;
+    const h2 = (h1 + 40) % 360;
+    return `linear-gradient(135deg, hsl(${h1}, 60%, 25%), hsl(${h2}, 70%, 10%))`;
+  };
+
   // ------------------------------------------------------------
   // SEARCH
+
   // ------------------------------------------------------------
 
   const normalizeText = (text) =>
@@ -202,9 +239,6 @@ function App() {
     })
   }, [characters, search])
 
-  // Group occurrences by source and paragraph so the same passage is shown once.
-  // Individual mention rows (including start/end positions) remain available in
-  // paragraph.mentions for future highlighting and search features.
   const mentionsBySource = useMemo(() => {
     const groups = {}
 
@@ -264,6 +298,14 @@ function App() {
     }
   }, [])
 
+  const currentSourceMentions =
+    story?.source_mention_counts && selectedSourceId !== null
+      ? story.source_mention_counts[String(selectedSourceId)] || 0
+      : mentionsTotal
+
+  const totalMentionsAllSources =
+    story?.total_mentions_all_sources ?? mentionsTotal
+
   return (
     <div className="app">
       {/* ========================================================
@@ -301,19 +343,19 @@ function App() {
         <div className="hero-content">
           <div className="kicker">AN INTERACTIVE MYTHOLOGY UNIVERSE</div>
 
-          <h1>MYTHVERSE</h1>
+          <h1 style={{ textShadow: '0 0 40px rgba(197, 160, 89, 0.6), 0 0 15px rgba(197, 160, 89, 0.3)' }}>MYTHVERSE</h1>
 
           <p>
             Ancient stories. Legendary characters. Hidden connections.
             Explore Indian mythology through the texts that carry its stories.
           </p>
 
-          <div className="hero-actions">
-            <a className="cta" href="#explore">
-              EXPLORE THE MYTHVERSE <span>→</span>
+          <div className="hero-actions" style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center', marginTop: '2rem' }}>
+            <a className="cta" href="#explore" style={{ padding: '1rem 2rem', background: 'linear-gradient(135deg, #e6c875 0%, #c5a059 100%)', color: '#1a0d00', textDecoration: 'none', borderRadius: '6px', fontWeight: 'bold', letterSpacing: '1px', boxShadow: '0 4px 20px rgba(197, 160, 89, 0.5)' }}>
+              EXPLORE THE MYTHVERSE <span style={{ marginLeft: '8px' }}>→</span>
             </a>
 
-            <a className="secondary-cta" href="#characters">
+            <a className="secondary-cta" href="#characters" style={{ padding: '1rem 2rem', background: 'rgba(20, 10, 5, 0.85)', color: '#e6c875', border: '1px solid rgba(197, 160, 89, 0.6)', textDecoration: 'none', borderRadius: '6px', fontWeight: 'bold', letterSpacing: '1px', backdropFilter: 'blur(8px)', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)' }}>
               MEET THE LEGENDS
             </a>
           </div>
@@ -342,40 +384,36 @@ function App() {
             </p>
           </div>
 
-          <div className="explore-grid">
-            <article className="explore-card">
-              <span className="explore-number">01</span>
-              <h3>READ</h3>
-              <p>
-                Explore chapters and passages from the sources inside
-                MYTHVERSE.
+          <div className="explore-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem', marginTop: '3rem' }}>
+            <article className="explore-card" style={{ background: 'linear-gradient(180deg, rgba(40,20,10,0.6) 0%, rgba(20,10,5,0.8) 100%)', padding: '2.5rem 1.5rem', borderRadius: '12px', border: '1px solid rgba(197, 160, 89, 0.15)', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(197, 160, 89, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c5a059', fontSize: '1.5rem' }}>📖</div>
+              <h3 style={{ margin: 0, color: '#c5a059', letterSpacing: '2px' }}>READ</h3>
+              <p style={{ margin: 0, color: '#a09070', lineHeight: '1.6', fontSize: '0.95rem' }}>
+                Explore chapters and original translated passages directly from the ancient source texts.
               </p>
             </article>
 
-            <article className="explore-card">
-              <span className="explore-number">02</span>
-              <h3>DISCOVER</h3>
-              <p>
-                Find characters, aliases and important moments directly
-                inside the stories.
+            <article className="explore-card" style={{ background: 'linear-gradient(180deg, rgba(40,20,10,0.6) 0%, rgba(20,10,5,0.8) 100%)', padding: '2.5rem 1.5rem', borderRadius: '12px', border: '1px solid rgba(197, 160, 89, 0.15)', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(197, 160, 89, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c5a059', fontSize: '1.5rem' }}>✨</div>
+              <h3 style={{ margin: 0, color: '#c5a059', letterSpacing: '2px' }}>DISCOVER</h3>
+              <p style={{ margin: 0, color: '#a09070', lineHeight: '1.6', fontSize: '0.95rem' }}>
+                Find characters, uncover their hidden aliases, and pinpoint important moments inside the stories.
               </p>
             </article>
 
-            <article className="explore-card">
-              <span className="explore-number">03</span>
-              <h3>CONNECT</h3>
-              <p>
-                Follow characters, relationships and events across the
-                mythology.
+            <article className="explore-card" style={{ background: 'linear-gradient(180deg, rgba(40,20,10,0.6) 0%, rgba(20,10,5,0.8) 100%)', padding: '2.5rem 1.5rem', borderRadius: '12px', border: '1px solid rgba(197, 160, 89, 0.15)', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(197, 160, 89, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c5a059', fontSize: '1.5rem' }}>🔗</div>
+              <h3 style={{ margin: 0, color: '#c5a059', letterSpacing: '2px' }}>CONNECT</h3>
+              <p style={{ margin: 0, color: '#a09070', lineHeight: '1.6', fontSize: '0.95rem' }}>
+                Follow dynamic character networks, relationships, and major events across the mythology.
               </p>
             </article>
 
-            <article className="explore-card">
-              <span className="explore-number">04</span>
-              <h3>EXPLORE</h3>
-              <p>
-                Jump from one story to another and discover how the pieces
-                fit together.
+            <article className="explore-card" style={{ background: 'linear-gradient(180deg, rgba(40,20,10,0.6) 0%, rgba(20,10,5,0.8) 100%)', padding: '2.5rem 1.5rem', borderRadius: '12px', border: '1px solid rgba(197, 160, 89, 0.15)', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(197, 160, 89, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c5a059', fontSize: '1.5rem' }}>🧭</div>
+              <h3 style={{ margin: 0, color: '#c5a059', letterSpacing: '2px' }}>EXPLORE</h3>
+              <p style={{ margin: 0, color: '#a09070', lineHeight: '1.6', fontSize: '0.95rem' }}>
+                Jump from one epic to another and discover how the pieces of the Mythverse fit together.
               </p>
             </article>
           </div>
@@ -384,8 +422,6 @@ function App() {
 
       {/* ========================================================
           SOURCES
-          Ramayana is currently the populated source.
-          The UI is intentionally source-agnostic.
       ======================================================== */}
 
       <section className="section dark" id="sources">
@@ -403,43 +439,34 @@ function App() {
           </div>
 
           <div className="source-grid">
-            <article className="source-card-large active-source">
-              <div className="source-art">
-                <span className="source-symbol">◈</span>
-              </div>
+            {sources.map((source, index) => (
+              <article key={source.id} className="source-card-large active-source" style={{ backgroundColor: index % 2 === 0 ? 'rgba(40, 20, 10, 0.4)' : 'rgba(20, 30, 20, 0.4)' }}>
+                <div className="source-art">
+                  <span className="source-symbol">{index % 2 === 0 ? '◈' : '✧'}</span>
+                </div>
 
-              <div className="source-content">
-                <div className="source-label">CURRENTLY AVAILABLE</div>
-                <h3>Valmiki Ramayana</h3>
-                <p>
-                  Explore characters, chapters, events and source passages
-                  from the current MYTHVERSE dataset.
-                </p>
+                <div className="source-content">
+                  <div className="source-label">AVAILABLE SOURCE</div>
+                  <h3>{source.title}</h3>
+                  <p>
+                    {source.author ? `By ${source.author}. ` : ''}
+                    {source.translator ? `Translated by ${source.translator}. ` : ''}
+                    Explore characters, chapters, and events from this dataset.
+                  </p>
 
-                <a href="#characters" className="source-link">
-                  EXPLORE SOURCE →
-                </a>
-              </div>
-            </article>
-
-            <article className="source-card-large future-source">
-              <div className="source-art">
-                <span className="source-symbol">✧</span>
-              </div>
-
-              <div className="source-content">
-                <div className="source-label">DESIGNED TO EXPAND</div>
-                <h3>More Worlds</h3>
-                <p>
-                  Mahabharata, Puranic literature, regional traditions and
-                  other texts can become part of the MYTHVERSE.
-                </p>
-
-                <span className="source-link muted">
-                  ADD THROUGH ADMIN →
-                </span>
-              </div>
-            </article>
+                  <button 
+                    onClick={() => {
+                      setSelectedSourceId(source.id);
+                      document.getElementById('characters').scrollIntoView({ behavior: 'smooth' });
+                    }} 
+                    className="source-link" 
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}
+                  >
+                    EXPLORE THIS SOURCE →
+                  </button>
+                </div>
+              </article>
+            ))}
           </div>
         </div>
       </section>
@@ -501,7 +528,10 @@ function App() {
                     key={character.id}
                     onClick={() => openCharacter(character)}
                   >
-                    <div className="portrait">
+                    <div 
+                      className="portrait" 
+                      style={{ background: getGradient(character.name || '') }}
+                    >
                       {character.name?.charAt(0)}
                     </div>
 
@@ -545,16 +575,21 @@ function App() {
             </p>
           </div>
 
-          <div className="connection-map">
-            <div className="connection-node main">CHARACTER</div>
-            <div className="connection-line line-one" />
-            <div className="connection-node node-one">ALIASES</div>
-            <div className="connection-line line-two" />
-            <div className="connection-node node-two">EVENTS</div>
-            <div className="connection-line line-three" />
-            <div className="connection-node node-three">SOURCES</div>
-            <div className="connection-line line-four" />
-            <div className="connection-node node-four">RELATIONSHIPS</div>
+          <div className="connection-map" style={{ height: '600px', width: '100%', backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: '12px', border: '1px solid rgba(255, 215, 0, 0.1)', overflow: 'hidden', display: 'flex', justifyContent: 'center', cursor: 'grab' }}>
+            {graphData.nodes.length > 0 ? (
+              <ForceGraph2D
+                graphData={graphData}
+                nodeLabel="name"
+                nodeColor={() => '#c5a059'}
+                nodeRelSize={6}
+                linkColor={() => 'rgba(197, 160, 89, 0.2)'}
+                width={1000}
+                height={600}
+                onNodeClick={(node) => openCharacterByName(node.name)}
+              />
+            ) : (
+              <div style={{ padding: '2rem', color: '#c5a059' }}>Loading Mythverse connections...</div>
+            )}
           </div>
         </div>
       </section>
@@ -720,24 +755,49 @@ function App() {
                 {story && !loadingStory && (
                   <>
                     <div className="profile-section source-selector-section">
-                      <label htmlFor="character-source-select">
-                        EXPLORE THIS CHARACTER IN
-                      </label>
-                      <select
-                        id="character-source-select"
-                        className="character-search"
-                        value={selectedSourceId ?? ''}
-                        onChange={(event) => changeSource(event.target.value)}
-                        disabled={sources.length === 0 || loadingStory}
-                      >
-                        {sources.map((source) => (
-                          <option key={source.id} value={source.id}>
-                            {source.title}
-                            {source.translator ? ` — ${source.translator}` : ''}
-                            {source.year ? ` (${source.year})` : ''}
-                          </option>
-                        ))}
-                      </select>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                        <label htmlFor="character-source-select">
+                          EXPLORE THIS CHARACTER IN
+                        </label>
+                        <select
+                          id="character-source-select"
+                          className="character-search"
+                          value={selectedSourceId ?? ''}
+                          onChange={(event) => changeSource(event.target.value)}
+                          disabled={sources.length === 0 || loadingStory}
+                        >
+                          {sources.map((source) => {
+                            const count = story.source_mention_counts
+                              ? story.source_mention_counts[String(source.id)] || 0
+                              : null
+                            return (
+                              <option key={source.id} value={source.id}>
+                                {source.title}
+                                {source.translator ? ` — ${source.translator}` : ''}
+                                {source.year ? ` (${source.year})` : ''}
+                                {count !== null
+                                  ? count === 0
+                                    ? ' · No mentions'
+                                    : ` · ${count} mentions`
+                                  : ''}
+                              </option>
+                            )
+                          })}
+                        </select>
+
+                        {!loadingMentions && totalMentionsAllSources === 0 && (
+                          <span className="alias-pill" style={{ opacity: 0.8, cursor: 'default' }}>
+                            No mentions in any script
+                          </span>
+                        )}
+
+                        {!loadingMentions && totalMentionsAllSources > 0 && currentSourceMentions === 0 && (
+                          <span className="alias-pill" style={{ opacity: 0.8, cursor: 'default' }}>
+                            No mentions in this script
+                          </span>
+                        )}
+                      </div>
+
                       <p className="mentions-intro">
                         Events and mentions below are filtered to this source.
                       </p>
@@ -785,6 +845,80 @@ function App() {
                       </p>
                     </div>
 
+                    {/* MAJOR EVENTS MOVED ABOVE MENTIONS */}
+                    <div className="major">
+                      <div className="major-heading">
+                        <h3>MAJOR EVENTS</h3>
+                        <span>{story.events?.length || 0} events</span>
+                      </div>
+
+                      {!story.events || story.events.length === 0 ? (
+                        <div className="state-box">
+                          No story events have been added for this
+                          character in this source yet.
+                        </div>
+                      ) : (
+                        <div className="modal-events timeline-events">
+                          {story.events.map((event, index) => (
+                            <article
+                              className="modal-event"
+                              key={event.id}
+                            >
+                              <div className="modal-event-number">
+                                {String(index + 1).padStart(2, '0')}
+                              </div>
+
+                              <div>
+                                <div className="event-meta">
+                                  {event.chapter?.book ||
+                                    story.source?.title ||
+                                    'Source'}
+                                  {' · '}
+                                  Chapter {event.chapter?.number}
+                                  {event.chapter?.title
+                                    ? ` · ${event.chapter.title}`
+                                    : ''}
+                                  {' · '}
+                                  Paragraphs {event.paragraph_start}–
+                                  {event.paragraph_end}
+                                </div>
+
+                                <h4>{event.title}</h4>
+
+                                <p className="event-summary">
+                                  {event.summary}
+                                </p>
+
+                                <details>
+                                  <summary>
+                                    READ ORIGINAL PASSAGE
+                                  </summary>
+
+                                  <div className="source-text">
+                                    {event.paragraphs?.map(
+                                      (paragraph) => (
+                                        <div
+                                          className="source-paragraph"
+                                          key={paragraph.number}
+                                        >
+                                          <span>
+                                            ¶ {paragraph.number}
+                                          </span>
+
+                                          <p>{paragraph.content}</p>
+                                        </div>
+                                      ),
+                                    )}
+                                  </div>
+                                </details>
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* MENTIONS SECTION BELOW MAJOR EVENTS */}
                     <section className="mentions-section">
                       <div className="major-heading mentions-heading">
                         <h3>MENTIONS IN THIS SOURCE</h3>
@@ -812,7 +946,7 @@ function App() {
                         !mentionsError &&
                         mentions.length === 0 && (
                           <div className="state-box">
-                            No recorded mentions were found for this character.
+                            No recorded mentions were found for this character in this source.
                           </div>
                         )}
 
@@ -898,78 +1032,6 @@ function App() {
                         </button>
                       )}
                     </section>
-
-                    <div className="major">
-                      <div className="major-heading">
-                        <h3>MAJOR EVENTS</h3>
-                        <span>{story.events?.length || 0} events</span>
-                      </div>
-
-                      {!story.events || story.events.length === 0 ? (
-                        <div className="state-box">
-                          No story events have been added for this
-                          character yet.
-                        </div>
-                      ) : (
-                        <div className="modal-events timeline-events">
-                          {story.events.map((event, index) => (
-                            <article
-                              className="modal-event"
-                              key={event.id}
-                            >
-                              <div className="modal-event-number">
-                                {String(index + 1).padStart(2, '0')}
-                              </div>
-
-                              <div>
-                                <div className="event-meta">
-                                  {event.chapter?.book ||
-                                    story.source?.title ||
-                                    'Source'}
-                                  {' · '}
-                                  Chapter {event.chapter?.number}
-                                  {event.chapter?.title
-                                    ? ` · ${event.chapter.title}`
-                                    : ''}
-                                  {' · '}
-                                  Paragraphs {event.paragraph_start}–
-                                  {event.paragraph_end}
-                                </div>
-
-                                <h4>{event.title}</h4>
-
-                                <p className="event-summary">
-                                  {event.summary}
-                                </p>
-
-                                <details>
-                                  <summary>
-                                    READ ORIGINAL PASSAGE
-                                  </summary>
-
-                                  <div className="source-text">
-                                    {event.paragraphs?.map(
-                                      (paragraph) => (
-                                        <div
-                                          className="source-paragraph"
-                                          key={paragraph.number}
-                                        >
-                                          <span>
-                                            ¶ {paragraph.number}
-                                          </span>
-
-                                          <p>{paragraph.content}</p>
-                                        </div>
-                                      ),
-                                    )}
-                                  </div>
-                                </details>
-                              </div>
-                            </article>
-                          ))}
-                        </div>
-                      )}
-                    </div>
                   </>
                 )}
               </>

@@ -385,6 +385,17 @@ def get_character_story(
             "paragraphs": paragraph_data,
         })
 
+    cursor.execute("""
+        SELECT b.source_id, COUNT(cm.id)
+        FROM character_mentions cm
+        JOIN chapters ch ON ch.id = cm.chapter_id
+        JOIN books b ON b.id = ch.book_id
+        WHERE cm.character_id = %s
+        GROUP BY b.source_id;
+    """, (character_id,))
+    source_mention_counts = {str(row[0]): row[1] for row in cursor.fetchall()}
+    total_mentions_all_sources = sum(source_mention_counts.values())
+
     cursor.close()
     connection.close()
 
@@ -403,6 +414,8 @@ def get_character_story(
         "source": source_info,
         "related_characters": related_characters,
         "events": story_events,
+        "source_mention_counts": source_mention_counts,
+        "total_mentions_all_sources": total_mentions_all_sources,
     }
 
 
@@ -570,3 +583,24 @@ def resolve_text_endpoint(request: ResolveTextRequest):
         )
 
     return resolve_text_service(request.text)
+
+@app.get("/graph")
+def get_graph():
+    connection = get_connection()
+    cursor = connection.cursor()
+    
+    # Fetch all clean characters
+    cursor.execute("SELECT id, name FROM characters;")
+    characters = cursor.fetchall()
+    
+    # Fetch all relationships
+    cursor.execute("SELECT character_id, related_character_id, relationship_type FROM character_relationships;")
+    relationships = cursor.fetchall()
+    
+    cursor.close()
+    connection.close()
+
+    nodes = [{"id": r[0], "name": r[1]} for r in characters]
+    links = [{"source": r[0], "target": r[1], "label": r[2]} for r in relationships]
+    
+    return {"nodes": nodes, "links": links}
