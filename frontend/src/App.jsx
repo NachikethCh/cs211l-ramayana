@@ -193,23 +193,21 @@ function App() {
     openCharacter(characters[nextIndex])
   }
 
-
   // ------------------------------------------------------------
   // AVATAR GENERATION
   // ------------------------------------------------------------
   const getGradient = (name) => {
-    let hash = 0;
+    let hash = 0
     for (let i = 0; i < name.length; i++) {
-      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+      hash = name.charCodeAt(i) + ((hash << 5) - hash)
     }
-    const h1 = Math.abs(hash) % 360;
-    const h2 = (h1 + 40) % 360;
-    return `linear-gradient(135deg, hsl(${h1}, 60%, 25%), hsl(${h2}, 70%, 10%))`;
-  };
+    const h1 = Math.abs(hash) % 360
+    const h2 = (h1 + 40) % 360
+    return `linear-gradient(135deg, hsl(${h1}, 60%, 25%), hsl(${h2}, 70%, 10%))`
+  }
 
   // ------------------------------------------------------------
   // SEARCH
-
   // ------------------------------------------------------------
 
   const normalizeText = (text) =>
@@ -313,8 +311,19 @@ function App() {
       ======================================================== */}
 
       <nav className="nav">
-        <a className="brand" href="#home">
-          <span className="brand-mark">✦</span>
+        <a className="brand" href="#home" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <img
+            src="/logo.png"
+            alt="Mythverse Emblem"
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              objectFit: 'cover',
+              border: '1px solid rgba(197, 160, 89, 0.6)',
+              boxShadow: '0 0 8px rgba(197, 160, 89, 0.4)'
+            }}
+          />
           MYTHVERSE
         </a>
 
@@ -456,8 +465,8 @@ function App() {
 
                   <button 
                     onClick={() => {
-                      setSelectedSourceId(source.id);
-                      document.getElementById('characters').scrollIntoView({ behavior: 'smooth' });
+                      setSelectedSourceId(source.id)
+                      document.getElementById('characters').scrollIntoView({ behavior: 'smooth' })
                     }} 
                     className="source-link" 
                     style={{ background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}
@@ -585,7 +594,10 @@ function App() {
                 linkColor={() => 'rgba(197, 160, 89, 0.2)'}
                 width={1000}
                 height={600}
-                onNodeClick={(node) => openCharacterByName(node.name)}
+                onNodeClick={(node) => {
+                  const match = characters.find(c => c.name.toLowerCase() === node.name?.toLowerCase())
+                  if (match) openCharacter(match)
+                }}
               />
             ) : (
               <div style={{ padding: '2rem', color: '#c5a059' }}>Loading Mythverse connections...</div>
@@ -628,8 +640,18 @@ function App() {
       ======================================================== */}
 
       <footer className="footer">
-        <div className="brand">
-          <span className="brand-mark">✦</span>
+        <div className="brand" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+          <img
+            src="/logo.png"
+            alt="Mythverse Emblem"
+            style={{
+              width: '24px',
+              height: '24px',
+              borderRadius: '50%',
+              objectFit: 'cover',
+              border: '1px solid rgba(197, 160, 89, 0.5)'
+            }}
+          />
           MYTHVERSE
         </div>
 
