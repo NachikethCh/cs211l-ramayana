@@ -148,7 +148,16 @@ def get_characters(source_id: Optional[int] = None):
                   AND b.source_id = %(source_id)s
             )
         )
-        ORDER BY c.id;
+        ORDER BY 
+            CASE WHEN %(source_id)s IS NOT NULL THEN (
+                SELECT COUNT(cm.id)
+                FROM character_mentions cm
+                JOIN chapters ch ON cm.chapter_id = ch.id
+                JOIN books b ON ch.book_id = b.id
+                WHERE cm.character_id = c.id
+                  AND b.source_id = %(source_id)s
+            ) END DESC NULLS LAST,
+            c.id ASC;
     """
 
     cursor.execute(query, {"source_id": source_id})

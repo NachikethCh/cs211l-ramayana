@@ -1864,3 +1864,12 @@ button {
 .mention-passage { margin: 0 0 0.65rem; color : #382719 ; line-height: 1.7; overflow-wrap: anywhere; }
 .mentions-load-more { display: block; width: 100%; margin-top: 1rem; padding: 0.9rem 1rem; border: 1px solid rgba(130, 105, 77, 0.35); border-radius: 10px; background: transparent; color: inherit; font: inherit; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.04em; cursor: pointer; }
 .mentions-load-more:disabled { cursor: wait; opacity: 0.6; }
+
+/* Prevent sticky navbar from hiding section titles during scrollIntoView */
+#explore,
+#sources,
+#characters,
+#connections,
+#about {
+  scroll-margin-top: 85px; 
+}
