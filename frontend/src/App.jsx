@@ -217,6 +217,26 @@ function App() {
   }
 
   // ------------------------------------------------------------
+  // GRAPH NODE STYLING
+  // ------------------------------------------------------------
+  const getNodeColor = (node) => {
+    switch (node.group) {
+      case 'deity':
+        return '#4da8da' // Celestial Blue
+      case 'sage':
+        return '#2ecc71' // Emerald Green
+      case 'royal':
+        return '#f1c40f' // Royal Gold
+      case 'asura':
+        return '#e74c3c' // Crimson
+      case 'creature':
+        return '#e67e22' // Orange
+      default:
+        return '#c5a059' // Default Mythverse Gold
+    }
+  }
+
+  // ------------------------------------------------------------
   // AVATAR GENERATION
   // ------------------------------------------------------------
 
@@ -896,10 +916,11 @@ function App() {
             {graphData.nodes.length > 0 ? (
               <ForceGraph2D
                 graphData={graphData}
-                nodeLabel="name"
-                nodeColor={() => '#c5a059'}
-                nodeRelSize={6}
+                nodeLabel={(node) => `${node.name} (${node.mention_count || 0} mentions)`}
+                nodeColor={getNodeColor}
+                nodeVal={(node) => Math.min(Math.max(node.val || 2, 2), 25)} // Dynamic node sizing based on mentions
                 linkColor={() => 'rgba(197, 160, 89, 0.2)'}
+                linkWidth={(link) => Math.min((link.weight || 1) * 0.3, 4)} // Dynamic edge weight
                 width={1000}
                 height={600}
                 onNodeClick={(node) => {

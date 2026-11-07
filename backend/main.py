@@ -621,22 +621,96 @@ def resolve_text_endpoint(request: ResolveTextRequest):
     return resolve_text_service(request.text)
 
 @app.get("/graph")
-def get_graph():
+def get_graph(source_id: Optional[int] = None):
     connection = get_connection()
     cursor = connection.cursor()
+
+    # 1. Fetch nodes with mention counts and roles for dynamic sizing and coloring
+    nodes_query = """
+        SELECT 
+            c.id, 
+            c.name,
+            cp.role,
+            (
+                SELECT COUNT(cm.id)
+                FROM character_mentions cm
+                JOIN chapters ch ON cm.chapter_id = ch.id
+                JOIN books b ON ch.book_id = b.id
+                WHERE cm.character_id = c.id
+                  AND (%(source_id)s IS NULL OR b.source_id = %(source_id)s)
+            ) as mention_count
+        FROM characters c
+        LEFT JOIN character_profiles cp ON c.id = cp.character_id
+        WHERE (
+            %(source_id)s IS NULL
+            OR EXISTS (
+                SELECT 1
+                FROM character_mentions cm
+                JOIN chapters ch ON cm.chapter_id = ch.id
+                JOIN books b ON ch.book_id = b.id
+                WHERE cm.character_id = c.id
+                  AND b.source_id = %(source_id)s
+            )
+        )
+    """
+    cursor.execute(nodes_query, {"source_id": source_id})
+    nodes_rows = cursor.fetchall()
     
-    # Fetch all clean characters
-    cursor.execute("SELECT id, name FROM characters;")
-    characters = cursor.fetchall()
+    nodes = []
+    for row in nodes_rows:
+        char_id, name, role, mention_count = row
+        mc = mention_count or 0
+        
+        # Parse archetypes for semantic color clustering
+        role_lower = (role or "").lower()
+        if any(w in role_lower for w in ["sage", "rishi", "seer"]):
+            group = "sage"
+        elif any(w in role_lower for w in ["god", "deity", "avatar", "celestial", "vishnu", "shiva", "brahma", "indra"]):
+            group = "deity"
+        elif any(w in role_lower for w in ["king", "prince", "princess", "queen", "emperor"]):
+            group = "royal"
+        elif any(w in role_lower for w in ["demon", "asura", "rakshasa", "daitya"]):
+            group = "asura"
+        elif any(w in role_lower for w in ["bird", "monkey", "vanara", "bear", "eagle", "mount"]):
+            group = "creature"
+        else:
+            group = "other"
+            
+        nodes.append({
+            "id": char_id,
+            "name": name,
+            "val": max(2, mc / 15),  # Scale radius based on mentions
+            "group": group,
+            "mention_count": mc
+        })
+
+    # 2. Fetch edges with dynamic weight based on co-occurrence frequency
+    links_query = """
+        SELECT source_character_id, target_character_id, COUNT(*) as weight
+        FROM character_events ce1
+        JOIN character_events ce2 
+          ON ce1.chapter_id = ce2.chapter_id 
+         AND ce1.paragraph_start <= ce2.paragraph_end 
+         AND ce1.paragraph_end >= ce2.paragraph_start
+         AND ce1.character_id < ce2.character_id
+        JOIN chapters ch ON ce1.chapter_id = ch.id
+        JOIN books b ON ch.book_id = b.id
+        WHERE (%(source_id)s IS NULL OR b.source_id = %(source_id)s)
+        GROUP BY source_character_id, target_character_id
+        HAVING COUNT(*) > 1
+    """
+    cursor.execute(links_query, {"source_id": source_id})
+    links_rows = cursor.fetchall()
     
-    # Fetch all relationships
-    cursor.execute("SELECT character_id, related_character_id, relationship_type FROM character_relationships;")
-    relationships = cursor.fetchall()
-    
+    links = []
+    for row in links_rows:
+        links.append({
+            "source": row[0],
+            "target": row[1],
+            "weight": row[2]
+        })
+
     cursor.close()
     connection.close()
 
-    nodes = [{"id": r[0], "name": r[1]} for r in characters]
-    links = [{"source": r[0], "target": r[1], "label": r[2]} for r in relationships]
-    
     return {"nodes": nodes, "links": links}
