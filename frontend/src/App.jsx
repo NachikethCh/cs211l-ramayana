@@ -8,6 +8,7 @@ function App() {
   const [characters, setCharacters] = useState([])
   const [sources, setSources] = useState([])
   const [selectedSourceId, setSelectedSourceId] = useState(null)
+  const [activeSourceFilter, setActiveSourceFilter] = useState(null)
   const [selectedCharacter, setSelectedCharacter] = useState(null)
   const [story, setStory] = useState(null)
 
@@ -23,15 +24,23 @@ function App() {
   const [modalOpen, setModalOpen] = useState(false)
   const [graphData, setGraphData] = useState({ nodes: [], links: [] })
 
+  // ------------------------------------------------------------
+  // GRAPH DATA (SUPPORTS SOURCE FILTERING)
+  // ------------------------------------------------------------
+
   useEffect(() => {
-    fetch(`${API_URL}/graph`)
-      .then(res => res.json())
-      .then(data => setGraphData(data))
-      .catch(err => console.error('Failed to fetch graph data:', err))
-  }, [])
+    const graphQuery = activeSourceFilter ? `?source_id=${activeSourceFilter}` : ''
+    fetch(`${API_URL}/graph${graphQuery}`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to fetch graph data')
+        return res.json()
+      })
+      .then((data) => setGraphData(data))
+      .catch((err) => console.error('Failed to fetch graph data:', err))
+  }, [activeSourceFilter])
 
   // ------------------------------------------------------------
-  // LOAD CHARACTERS FROM YOUR EXISTING FASTAPI BACKEND
+  // LOAD SOURCES
   // ------------------------------------------------------------
 
   useEffect(() => {
@@ -49,8 +58,16 @@ function App() {
       })
   }, [])
 
+  // ------------------------------------------------------------
+  // LOAD CHARACTERS
+  // ------------------------------------------------------------
+
   useEffect(() => {
-    fetch(`${API_URL}/characters`)
+    setLoadingCharacters(true)
+    setError(null)
+    const sourceQuery = activeSourceFilter ? `?source_id=${activeSourceFilter}` : ''
+
+    fetch(`${API_URL}/characters${sourceQuery}`)
       .then((response) => {
         if (!response.ok) {
           throw new Error('Failed to fetch characters')
@@ -66,14 +83,18 @@ function App() {
         setError('Could not connect to the MYTHVERSE API.')
         setLoadingCharacters(false)
       })
-  }, [])
+  }, [activeSourceFilter])
 
   // ------------------------------------------------------------
   // OPEN CHARACTER
   // ------------------------------------------------------------
 
-  const openCharacter = async (character, requestedSourceId = selectedSourceId, isExplicitSourceChange = false) => {
-    let sourceId = requestedSourceId ?? sources[0]?.id ?? null
+  const openCharacter = async (
+    character,
+    requestedSourceId = selectedSourceId,
+    isExplicitSourceChange = false,
+  ) => {
+    let sourceId = requestedSourceId ?? activeSourceFilter ?? sources[0]?.id ?? null
 
     setSelectedCharacter(character)
     if (sourceId !== null) setSelectedSourceId(Number(sourceId))
@@ -101,8 +122,7 @@ function App() {
 
       let data = await response.json()
 
-      // If opening a character (not manually switching source) and current source has 0 mentions,
-      // automatically switch to the first source that has mentions for this character.
+      // Auto-switch to first available source if character has 0 mentions here
       const counts = data.source_mention_counts || {}
       if (
         !isExplicitSourceChange &&
@@ -138,7 +158,7 @@ function App() {
     offset = 0,
     requestedSourceId = selectedSourceId,
   ) => {
-    const sourceId = requestedSourceId ?? sources[0]?.id ?? null
+    const sourceId = requestedSourceId ?? activeSourceFilter ?? sources[0]?.id ?? null
     setLoadingMentions(true)
     setMentionsError(null)
 
@@ -179,23 +199,27 @@ function App() {
   }
 
   const changeCharacter = (direction) => {
-    if (!selectedCharacter || characters.length === 0) return
+    if (!selectedCharacter || filteredCharacters.length === 0) return
 
-    const currentIndex = characters.findIndex(
+    const currentIndex = filteredCharacters.findIndex(
       (character) => character.id === selectedCharacter.id,
     )
 
-    if (currentIndex === -1) return
+    if (currentIndex === -1) {
+      openCharacter(filteredCharacters[0])
+      return
+    }
 
     const nextIndex =
-      (currentIndex + direction + characters.length) % characters.length
+      (currentIndex + direction + filteredCharacters.length) % filteredCharacters.length
 
-    openCharacter(characters[nextIndex])
+    openCharacter(filteredCharacters[nextIndex])
   }
 
   // ------------------------------------------------------------
   // AVATAR GENERATION
   // ------------------------------------------------------------
+
   const getGradient = (name) => {
     let hash = 0
     for (let i = 0; i < name.length; i++) {
@@ -207,7 +231,7 @@ function App() {
   }
 
   // ------------------------------------------------------------
-  // SEARCH
+  // SEARCH & CLIENT-SIDE FILTERING FALLBACK
   // ------------------------------------------------------------
 
   const normalizeText = (text) =>
@@ -219,9 +243,18 @@ function App() {
   const filteredCharacters = useMemo(() => {
     const query = normalizeText(search.trim())
 
-    if (!query) return characters
-
     return characters.filter((character) => {
+      // If character object has source_ids array, respect activeSourceFilter client-side as well
+      if (
+        activeSourceFilter !== null &&
+        Array.isArray(character.source_ids) &&
+        !character.source_ids.includes(activeSourceFilter)
+      ) {
+        return false
+      }
+
+      if (!query) return true
+
       const searchableText = [
         character.name,
         character.description,
@@ -235,7 +268,7 @@ function App() {
         normalizeText(value).includes(query),
       )
     })
-  }, [characters, search])
+  }, [characters, search, activeSourceFilter])
 
   const mentionsBySource = useMemo(() => {
     const groups = {}
@@ -304,6 +337,8 @@ function App() {
   const totalMentionsAllSources =
     story?.total_mentions_all_sources ?? mentionsTotal
 
+  const activeSourceObj = sources.find((s) => s.id === activeSourceFilter)
+
   return (
     <div className="app">
       {/* ========================================================
@@ -321,7 +356,7 @@ function App() {
               borderRadius: '50%',
               objectFit: 'cover',
               border: '1px solid rgba(197, 160, 89, 0.6)',
-              boxShadow: '0 0 8px rgba(197, 160, 89, 0.4)'
+              boxShadow: '0 0 8px rgba(197, 160, 89, 0.4)',
             }}
           />
           MYTHVERSE
@@ -352,27 +387,58 @@ function App() {
         <div className="hero-content">
           <div className="kicker">AN INTERACTIVE MYTHOLOGY UNIVERSE</div>
 
-          <h1 style={{ textShadow: '0 0 40px rgba(197, 160, 89, 0.6), 0 0 15px rgba(197, 160, 89, 0.3)' }}>MYTHVERSE</h1>
+          <h1 style={{ textShadow: '0 0 40px rgba(197, 160, 89, 0.6), 0 0 15px rgba(197, 160, 89, 0.3)' }}>
+            MYTHVERSE
+          </h1>
 
           <p>
             Ancient stories. Legendary characters. Hidden connections.
             Explore Indian mythology through the texts that carry its stories.
           </p>
 
-          <div className="hero-actions" style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center', marginTop: '2rem' }}>
-            <a className="cta" href="#explore" style={{ padding: '1rem 2rem', background: 'linear-gradient(135deg, #e6c875 0%, #c5a059 100%)', color: '#1a0d00', textDecoration: 'none', borderRadius: '6px', fontWeight: 'bold', letterSpacing: '1px', boxShadow: '0 4px 20px rgba(197, 160, 89, 0.5)' }}>
+          <div
+            className="hero-actions"
+            style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center', marginTop: '2rem' }}
+          >
+            <a
+              className="cta"
+              href="#explore"
+              style={{
+                padding: '1rem 2rem',
+                background: 'linear-gradient(135deg, #e6c875 0%, #c5a059 100%)',
+                color: '#1a0d00',
+                textDecoration: 'none',
+                borderRadius: '6px',
+                fontWeight: 'bold',
+                letterSpacing: '1px',
+                boxShadow: '0 4px 20px rgba(197, 160, 89, 0.5)',
+              }}
+            >
               EXPLORE THE MYTHVERSE <span style={{ marginLeft: '8px' }}>→</span>
             </a>
 
-            <a className="secondary-cta" href="#characters" style={{ padding: '1rem 2rem', background: 'rgba(20, 10, 5, 0.85)', color: '#e6c875', border: '1px solid rgba(197, 160, 89, 0.6)', textDecoration: 'none', borderRadius: '6px', fontWeight: 'bold', letterSpacing: '1px', backdropFilter: 'blur(8px)', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)' }}>
+            <a
+              className="secondary-cta"
+              href="#characters"
+              style={{
+                padding: '1rem 2rem',
+                background: 'rgba(20, 10, 5, 0.85)',
+                color: '#e6c875',
+                border: '1px solid rgba(197, 160, 89, 0.6)',
+                textDecoration: 'none',
+                borderRadius: '6px',
+                fontWeight: 'bold',
+                letterSpacing: '1px',
+                backdropFilter: 'blur(8px)',
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
+              }}
+            >
               MEET THE LEGENDS
             </a>
           </div>
         </div>
 
-        <div className="scroll-indicator">
-          DISCOVER BELOW · ↓
-        </div>
+        <div className="scroll-indicator">DISCOVER BELOW · ↓</div>
       </header>
 
       {/* ========================================================
@@ -393,33 +459,153 @@ function App() {
             </p>
           </div>
 
-          <div className="explore-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem', marginTop: '3rem' }}>
-            <article className="explore-card" style={{ background: 'linear-gradient(180deg, rgba(40,20,10,0.6) 0%, rgba(20,10,5,0.8) 100%)', padding: '2.5rem 1.5rem', borderRadius: '12px', border: '1px solid rgba(197, 160, 89, 0.15)', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-              <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(197, 160, 89, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c5a059', fontSize: '1.5rem' }}>📖</div>
+          <div
+            className="explore-grid"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+              gap: '1.5rem',
+              marginTop: '3rem',
+            }}
+          >
+            <article
+              className="explore-card"
+              style={{
+                background:
+                  'linear-gradient(180deg, rgba(40,20,10,0.6) 0%, rgba(20,10,5,0.8) 100%)',
+                padding: '2.5rem 1.5rem',
+                borderRadius: '12px',
+                border: '1px solid rgba(197, 160, 89, 0.15)',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '1rem',
+              }}
+            >
+              <div
+                style={{
+                  width: '50px',
+                  height: '50px',
+                  borderRadius: '50%',
+                  background: 'rgba(197, 160, 89, 0.1)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#c5a059',
+                  fontSize: '1.5rem',
+                }}
+              >
+                📖
+              </div>
               <h3 style={{ margin: 0, color: '#c5a059', letterSpacing: '2px' }}>READ</h3>
               <p style={{ margin: 0, color: '#a09070', lineHeight: '1.6', fontSize: '0.95rem' }}>
                 Explore chapters and original translated passages directly from the ancient source texts.
               </p>
             </article>
 
-            <article className="explore-card" style={{ background: 'linear-gradient(180deg, rgba(40,20,10,0.6) 0%, rgba(20,10,5,0.8) 100%)', padding: '2.5rem 1.5rem', borderRadius: '12px', border: '1px solid rgba(197, 160, 89, 0.15)', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-              <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(197, 160, 89, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c5a059', fontSize: '1.5rem' }}>✨</div>
+            <article
+              className="explore-card"
+              style={{
+                background:
+                  'linear-gradient(180deg, rgba(40,20,10,0.6) 0%, rgba(20,10,5,0.8) 100%)',
+                padding: '2.5rem 1.5rem',
+                borderRadius: '12px',
+                border: '1px solid rgba(197, 160, 89, 0.15)',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '1rem',
+              }}
+            >
+              <div
+                style={{
+                  width: '50px',
+                  height: '50px',
+                  borderRadius: '50%',
+                  background: 'rgba(197, 160, 89, 0.1)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#c5a059',
+                  fontSize: '1.5rem',
+                }}
+              >
+                ✨
+              </div>
               <h3 style={{ margin: 0, color: '#c5a059', letterSpacing: '2px' }}>DISCOVER</h3>
               <p style={{ margin: 0, color: '#a09070', lineHeight: '1.6', fontSize: '0.95rem' }}>
                 Find characters, uncover their hidden aliases, and pinpoint important moments inside the stories.
               </p>
             </article>
 
-            <article className="explore-card" style={{ background: 'linear-gradient(180deg, rgba(40,20,10,0.6) 0%, rgba(20,10,5,0.8) 100%)', padding: '2.5rem 1.5rem', borderRadius: '12px', border: '1px solid rgba(197, 160, 89, 0.15)', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-              <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(197, 160, 89, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c5a059', fontSize: '1.5rem' }}>🔗</div>
+            <article
+              className="explore-card"
+              style={{
+                background:
+                  'linear-gradient(180deg, rgba(40,20,10,0.6) 0%, rgba(20,10,5,0.8) 100%)',
+                padding: '2.5rem 1.5rem',
+                borderRadius: '12px',
+                border: '1px solid rgba(197, 160, 89, 0.15)',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '1rem',
+              }}
+            >
+              <div
+                style={{
+                  width: '50px',
+                  height: '50px',
+                  borderRadius: '50%',
+                  background: 'rgba(197, 160, 89, 0.1)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#c5a059',
+                  fontSize: '1.5rem',
+                }}
+              >
+                🔗
+              </div>
               <h3 style={{ margin: 0, color: '#c5a059', letterSpacing: '2px' }}>CONNECT</h3>
               <p style={{ margin: 0, color: '#a09070', lineHeight: '1.6', fontSize: '0.95rem' }}>
                 Follow dynamic character networks, relationships, and major events across the mythology.
               </p>
             </article>
 
-            <article className="explore-card" style={{ background: 'linear-gradient(180deg, rgba(40,20,10,0.6) 0%, rgba(20,10,5,0.8) 100%)', padding: '2.5rem 1.5rem', borderRadius: '12px', border: '1px solid rgba(197, 160, 89, 0.15)', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-              <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'rgba(197, 160, 89, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c5a059', fontSize: '1.5rem' }}>🧭</div>
+            <article
+              className="explore-card"
+              style={{
+                background:
+                  'linear-gradient(180deg, rgba(40,20,10,0.6) 0%, rgba(20,10,5,0.8) 100%)',
+                padding: '2.5rem 1.5rem',
+                borderRadius: '12px',
+                border: '1px solid rgba(197, 160, 89, 0.15)',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '1rem',
+              }}
+            >
+              <div
+                style={{
+                  width: '50px',
+                  height: '50px',
+                  borderRadius: '50%',
+                  background: 'rgba(197, 160, 89, 0.1)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#c5a059',
+                  fontSize: '1.5rem',
+                }}
+              >
+                🧭
+              </div>
               <h3 style={{ margin: 0, color: '#c5a059', letterSpacing: '2px' }}>EXPLORE</h3>
               <p style={{ margin: 0, color: '#a09070', lineHeight: '1.6', fontSize: '0.95rem' }}>
                 Jump from one epic to another and discover how the pieces of the Mythverse fit together.
@@ -441,41 +627,94 @@ function App() {
             <h2>Explore the Sources</h2>
 
             <p>
-              MYTHVERSE is designed to grow. The Ramayana is the first source;
-              administrators can add new texts, traditions, languages and
-              scripts over time.
+              MYTHVERSE is designed to grow. Select any text below to enter its world,
+              filter characters, and view its narrative graph.
             </p>
           </div>
 
           <div className="source-grid">
-            {sources.map((source, index) => (
-              <article key={source.id} className="source-card-large active-source" style={{ backgroundColor: index % 2 === 0 ? 'rgba(40, 20, 10, 0.4)' : 'rgba(20, 30, 20, 0.4)' }}>
-                <div className="source-art">
-                  <span className="source-symbol">{index % 2 === 0 ? '◈' : '✧'}</span>
-                </div>
+            {sources.map((source, index) => {
+              const isSelected = activeSourceFilter === source.id
+              return (
+                <article
+                  key={source.id}
+                  className={`source-card-large active-source ${isSelected ? 'selected-source-card' : ''}`}
+                  style={{
+                    backgroundColor: isSelected
+                      ? 'rgba(60, 40, 15, 0.7)'
+                      : index % 2 === 0
+                        ? 'rgba(40, 20, 10, 0.4)'
+                        : 'rgba(20, 30, 20, 0.4)',
+                    border: isSelected
+                      ? '1px solid #c5a059'
+                      : '1px solid rgba(197, 160, 89, 0.2)',
+                    boxShadow: isSelected
+                      ? '0 0 25px rgba(197, 160, 89, 0.35)'
+                      : 'none',
+                    transition: 'all 0.3s ease',
+                  }}
+                >
+                  <div className="source-art">
+                    <span className="source-symbol">{index % 2 === 0 ? '◈' : '✧'}</span>
+                  </div>
 
-                <div className="source-content">
-                  <div className="source-label">AVAILABLE SOURCE</div>
-                  <h3>{source.title}</h3>
-                  <p>
-                    {source.author ? `By ${source.author}. ` : ''}
-                    {source.translator ? `Translated by ${source.translator}. ` : ''}
-                    Explore characters, chapters, and events from this dataset.
-                  </p>
+                  <div className="source-content">
+                    <div className="source-label">
+                      {isSelected ? 'CURRENTLY VIEWING' : 'AVAILABLE SOURCE'}
+                    </div>
+                    <h3>{source.title}</h3>
+                    <p>
+                      {source.author ? `By ${source.author}. ` : ''}
+                      {source.translator ? `Translated by ${source.translator}. ` : ''}
+                      Explore characters, chapters, and events from this dataset.
+                    </p>
 
-                  <button 
-                    onClick={() => {
-                      setSelectedSourceId(source.id)
-                      document.getElementById('characters').scrollIntoView({ behavior: 'smooth' })
-                    }} 
-                    className="source-link" 
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}
-                  >
-                    EXPLORE THIS SOURCE →
-                  </button>
-                </div>
-              </article>
-            ))}
+                    <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+                      <button
+                        onClick={() => {
+                          setActiveSourceFilter(source.id)
+                          setSelectedSourceId(source.id)
+                          document.getElementById('characters').scrollIntoView({ behavior: 'smooth' })
+                        }}
+                        className="source-link"
+                        style={{
+                          background: isSelected ? '#c5a059' : 'none',
+                          color: isSelected ? '#1a0d00' : '#c5a059',
+                          fontWeight: 'bold',
+                          border: isSelected ? 'none' : '1px solid rgba(197, 160, 89, 0.4)',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          padding: '6px 14px',
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        {isSelected ? '✓ VIEWING CHARACTERS' : 'EXPLORE CHARACTERS →'}
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setActiveSourceFilter(source.id)
+                          setSelectedSourceId(source.id)
+                          document.getElementById('connections').scrollIntoView({ behavior: 'smooth' })
+                        }}
+                        className="source-link"
+                        style={{
+                          background: 'none',
+                          color: '#a09070',
+                          border: '1px solid rgba(160, 144, 112, 0.3)',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          padding: '6px 14px',
+                          fontSize: '0.85rem',
+                        }}
+                      >
+                        VIEW GRAPH ↗
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              )
+            })}
           </div>
         </div>
       </section>
@@ -489,19 +728,69 @@ function App() {
           <div className="section-title reveal">
             <div className="eyebrow">THE LEGENDS</div>
 
-            <h2>Meet the Characters</h2>
+            <h2>
+              {activeSourceObj
+                ? `Characters in ${activeSourceObj.title}`
+                : 'Meet the Characters'}
+            </h2>
 
             <p>
-              These characters are loaded from your PostgreSQL database
-              through the existing FastAPI backend.
+              {activeSourceObj
+                ? `Viewing characters who appear in ${activeSourceObj.title}. Mentions and relationships are scoped to this text.`
+                : 'These characters are loaded from your PostgreSQL database through the existing FastAPI backend.'}
             </p>
           </div>
+
+          {/* Active Source Scope Filter Chip */}
+          {activeSourceObj && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0.85rem 1.25rem',
+                marginBottom: '1.5rem',
+                backgroundColor: 'rgba(197, 160, 89, 0.1)',
+                border: '1px solid rgba(197, 160, 89, 0.35)',
+                borderRadius: '8px',
+                flexWrap: 'wrap',
+                gap: '10px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ color: '#c5a059', fontSize: '1.1rem' }}>◈</span>
+                <span style={{ color: '#f3e5ab', fontSize: '0.95rem' }}>
+                  Filtered by source: <strong>{activeSourceObj.title}</strong>
+                </span>
+              </div>
+              <button
+                onClick={() => setActiveSourceFilter(null)}
+                style={{
+                  background: 'rgba(255, 100, 100, 0.15)',
+                  color: '#ff9999',
+                  border: '1px solid rgba(255, 100, 100, 0.3)',
+                  padding: '5px 12px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  letterSpacing: '0.5px',
+                  transition: 'background 0.2s ease',
+                }}
+              >
+                ✕ Clear Source Filter (Show All)
+              </button>
+            </div>
+          )}
 
           <div className="character-toolbar">
             <input
               className="character-search"
               type="search"
-              placeholder="Search characters, aliases or stories..."
+              placeholder={
+                activeSourceObj
+                  ? `Search characters within ${activeSourceObj.title}...`
+                  : 'Search characters, aliases or stories...'
+              }
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
@@ -523,7 +812,9 @@ function App() {
             !error &&
             filteredCharacters.length === 0 && (
               <div className="state-box">
-                No characters match your search.
+                {activeSourceObj
+                  ? `No characters found for this search in ${activeSourceObj.title}.`
+                  : 'No characters match your search.'}
               </div>
             )}
 
@@ -537,8 +828,8 @@ function App() {
                     key={character.id}
                     onClick={() => openCharacter(character)}
                   >
-                    <div 
-                      className="portrait" 
+                    <div
+                      className="portrait"
                       style={{ background: getGradient(character.name || '') }}
                     >
                       {character.name?.charAt(0)}
@@ -575,16 +866,33 @@ function App() {
           <div className="section-title reveal">
             <div className="eyebrow">THE MYTHVERSE</div>
 
-            <h2>Every story is connected.</h2>
+            <h2>
+              {activeSourceObj
+                ? `${activeSourceObj.title} Network`
+                : 'Every story is connected.'}
+            </h2>
 
             <p>
-              A character can have many names. A character can appear in many
-              chapters. Events connect people, places and stories. MYTHVERSE
-              brings those connections together.
+              {activeSourceObj
+                ? `Showing co-occurrence graph of characters who interact inside ${activeSourceObj.title}.`
+                : 'A character can have many names. A character can appear in many chapters. Events connect people, places and stories.'}
             </p>
           </div>
 
-          <div className="connection-map" style={{ height: '600px', width: '100%', backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: '12px', border: '1px solid rgba(255, 215, 0, 0.1)', overflow: 'hidden', display: 'flex', justifyContent: 'center', cursor: 'grab' }}>
+          <div
+            className="connection-map"
+            style={{
+              height: '600px',
+              width: '100%',
+              backgroundColor: 'rgba(0,0,0,0.4)',
+              borderRadius: '12px',
+              border: '1px solid rgba(255, 215, 0, 0.1)',
+              overflow: 'hidden',
+              display: 'flex',
+              justifyContent: 'center',
+              cursor: 'grab',
+            }}
+          >
             {graphData.nodes.length > 0 ? (
               <ForceGraph2D
                 graphData={graphData}
@@ -595,12 +903,16 @@ function App() {
                 width={1000}
                 height={600}
                 onNodeClick={(node) => {
-                  const match = characters.find(c => c.name.toLowerCase() === node.name?.toLowerCase())
+                  const match = characters.find(
+                    (c) => c.name.toLowerCase() === node.name?.toLowerCase(),
+                  )
                   if (match) openCharacter(match)
                 }}
               />
             ) : (
-              <div style={{ padding: '2rem', color: '#c5a059' }}>Loading Mythverse connections...</div>
+              <div style={{ padding: '2rem', color: '#c5a059' }}>
+                Loading Mythverse connections...
+              </div>
             )}
           </div>
         </div>
@@ -640,7 +952,15 @@ function App() {
       ======================================================== */}
 
       <footer className="footer">
-        <div className="brand" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+        <div
+          className="brand"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '10px',
+          }}
+        >
           <img
             src="/logo.png"
             alt="Mythverse Emblem"
@@ -649,7 +969,7 @@ function App() {
               height: '24px',
               borderRadius: '50%',
               objectFit: 'cover',
-              border: '1px solid rgba(197, 160, 89, 0.5)'
+              border: '1px solid rgba(197, 160, 89, 0.5)',
             }}
           />
           MYTHVERSE
@@ -777,7 +1097,14 @@ function App() {
                 {story && !loadingStory && (
                   <>
                     <div className="profile-section source-selector-section">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '12px',
+                          flexWrap: 'wrap',
+                        }}
+                      >
                         <label htmlFor="character-source-select">
                           EXPLORE THIS CHARACTER IN
                         </label>
@@ -808,16 +1135,24 @@ function App() {
                         </select>
 
                         {!loadingMentions && totalMentionsAllSources === 0 && (
-                          <span className="alias-pill" style={{ opacity: 0.8, cursor: 'default' }}>
+                          <span
+                            className="alias-pill"
+                            style={{ opacity: 0.8, cursor: 'default' }}
+                          >
                             No mentions in any script
                           </span>
                         )}
 
-                        {!loadingMentions && totalMentionsAllSources > 0 && currentSourceMentions === 0 && (
-                          <span className="alias-pill" style={{ opacity: 0.8, cursor: 'default' }}>
-                            No mentions in this script
-                          </span>
-                        )}
+                        {!loadingMentions &&
+                          totalMentionsAllSources > 0 &&
+                          currentSourceMentions === 0 && (
+                            <span
+                              className="alias-pill"
+                              style={{ opacity: 0.8, cursor: 'default' }}
+                            >
+                              No mentions in this script
+                            </span>
+                          )}
                       </div>
 
                       <p className="mentions-intro">
@@ -837,12 +1172,8 @@ function App() {
                           {story.source.translator ||
                             story.source.author ||
                             'Source text'}
-                          {story.source.year
-                            ? ` · ${story.source.year}`
-                            : ''}
-                          {story.source.language
-                            ? ` · ${story.source.language}`
-                            : ''}
+                          {story.source.year ? ` · ${story.source.year}` : ''}
+                          {story.source.language ? ` · ${story.source.language}` : ''}
                         </div>
 
                         {story.source.url && (
@@ -867,7 +1198,7 @@ function App() {
                       </p>
                     </div>
 
-                    {/* MAJOR EVENTS MOVED ABOVE MENTIONS */}
+                    {/* MAJOR EVENTS */}
                     <div className="major">
                       <div className="major-heading">
                         <h3>MAJOR EVENTS</h3>
@@ -876,8 +1207,8 @@ function App() {
 
                       {!story.events || story.events.length === 0 ? (
                         <div className="state-box">
-                          No story events have been added for this
-                          character in this source yet.
+                          No story events have been added for this character in
+                          this source yet.
                         </div>
                       ) : (
                         <div className="modal-events timeline-events">
@@ -912,25 +1243,18 @@ function App() {
                                 </p>
 
                                 <details>
-                                  <summary>
-                                    READ ORIGINAL PASSAGE
-                                  </summary>
+                                  <summary>READ ORIGINAL PASSAGE</summary>
 
                                   <div className="source-text">
-                                    {event.paragraphs?.map(
-                                      (paragraph) => (
-                                        <div
-                                          className="source-paragraph"
-                                          key={paragraph.number}
-                                        >
-                                          <span>
-                                            ¶ {paragraph.number}
-                                          </span>
-
-                                          <p>{paragraph.content}</p>
-                                        </div>
-                                      ),
-                                    )}
+                                    {event.paragraphs?.map((paragraph) => (
+                                      <div
+                                        className="source-paragraph"
+                                        key={paragraph.number}
+                                      >
+                                        <span>¶ {paragraph.number}</span>
+                                        <p>{paragraph.content}</p>
+                                      </div>
+                                    ))}
                                   </div>
                                 </details>
                               </div>
@@ -940,7 +1264,7 @@ function App() {
                       )}
                     </div>
 
-                    {/* MENTIONS SECTION BELOW MAJOR EVENTS */}
+                    {/* MENTIONS SECTION */}
                     <section className="mentions-section">
                       <div className="major-heading mentions-heading">
                         <h3>MENTIONS IN THIS SOURCE</h3>
@@ -950,8 +1274,9 @@ function App() {
                       </div>
 
                       <p className="mentions-intro">
-                        Explore this character's recorded appearances in the selected text,
-                        with passages and source locations preserved.
+                        Explore this character's recorded appearances in the
+                        selected text, with passages and source locations
+                        preserved.
                       </p>
 
                       {mentionsError && (
@@ -968,65 +1293,101 @@ function App() {
                         !mentionsError &&
                         mentions.length === 0 && (
                           <div className="state-box">
-                            No recorded mentions were found for this character in this source.
+                            No recorded mentions were found for this character
+                            in this source.
                           </div>
                         )}
 
-                      {Object.entries(mentionsBySource).map(([sourceId, group]) => (
-                        <section className="mention-source-group" key={sourceId}>
-                          <div className="mention-source-heading">
-                            <h4>{group.source.title || 'Unknown source'}</h4>
-                            <p>
-                              {group.source.translator || group.source.author || 'Translator not specified'}
-                              {group.source.year ? ` · ${group.source.year}` : ''}
-                              {group.source.language ? ` · ${group.source.language}` : ''}
-                            </p>
-                            {group.source.url && (
-                              <a href={group.source.url} target="_blank" rel="noreferrer">
-                                VIEW SOURCE ↗
-                              </a>
-                            )}
-                          </div>
+                      {Object.entries(mentionsBySource).map(
+                        ([sourceId, group]) => (
+                          <section className="mention-source-group" key={sourceId}>
+                            <div className="mention-source-heading">
+                              <h4>{group.source.title || 'Unknown source'}</h4>
+                              <p>
+                                {group.source.translator ||
+                                  group.source.author ||
+                                  'Translator not specified'}
+                                {group.source.year ? ` · ${group.source.year}` : ''}
+                                {group.source.language ? ` · ${group.source.language}` : ''}
+                              </p>
+                              {group.source.url && (
+                                <a
+                                  href={group.source.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  VIEW SOURCE ↗
+                                </a>
+                              )}
+                            </div>
 
-                          <div className="mention-list">
-                            {group.paragraphs.map((paragraph) => {
-                              const mention = paragraph.mention
-                              const matchedNames = [
-                                ...new Set(paragraph.mentions.map((item) => item.mentioned_text).filter(Boolean)),
-                              ]
+                            <div className="mention-list">
+                              {group.paragraphs.map((paragraph) => {
+                                const mention = paragraph.mention
+                                const matchedNames = [
+                                  ...new Set(
+                                    paragraph.mentions
+                                      .map((item) => item.mentioned_text)
+                                      .filter(Boolean),
+                                  ),
+                                ]
 
-                              return (
-                                <article className="mention-card" key={paragraph.key}>
-                                  <div className="mention-meta">
-                                    {mention.book?.name ? `${mention.book.name} · ` : ''}
-                                    {mention.chapter?.number != null ? `Chapter ${mention.chapter.number}` : 'Chapter'}
-                                    {mention.chapter?.title ? ` · ${mention.chapter.title}` : ''}
-                                    {mention.paragraph_number != null ? ` · Paragraph ${mention.paragraph_number}` : ''}
-                                  </div>
+                                return (
+                                  <article
+                                    className="mention-card"
+                                    key={paragraph.key}
+                                  >
+                                    <div className="mention-meta">
+                                      {mention.book?.name
+                                        ? `${mention.book.name} · `
+                                        : ''}
+                                      {mention.chapter?.number != null
+                                        ? `Chapter ${mention.chapter.number}`
+                                        : 'Chapter'}
+                                      {mention.chapter?.title
+                                        ? ` · ${mention.chapter.title}`
+                                        : ''}
+                                      {mention.paragraph_number != null
+                                        ? ` · Paragraph ${mention.paragraph_number}`
+                                        : ''}
+                                    </div>
 
-                                  <div className="mention-matched-name">
-                                    Matched name{matchedNames.length === 1 ? '' : 's'}:{' '}
-                                    <strong>{matchedNames.join(', ') || 'Name unavailable'}</strong>
-                                    <span className="mention-occurrence-count">
-                                      {' '}· {paragraph.mentions.length} occurrence{paragraph.mentions.length === 1 ? '' : 's'}
-                                    </span>
-                                  </div>
+                                    <div className="mention-matched-name">
+                                      Matched name
+                                      {matchedNames.length === 1 ? '' : 's'}:{' '}
+                                      <strong>
+                                        {matchedNames.join(', ') ||
+                                          'Name unavailable'}
+                                      </strong>
+                                      <span className="mention-occurrence-count">
+                                        {' '}
+                                        · {paragraph.mentions.length} occurrence
+                                        {paragraph.mentions.length === 1 ? '' : 's'}
+                                      </span>
+                                    </div>
 
-                                  <p className="mention-passage">
-                                    {mention.passage || 'Original passage unavailable.'}
-                                  </p>
+                                    <p className="mention-passage">
+                                      {mention.passage ||
+                                        'Original passage unavailable.'}
+                                    </p>
 
-                                  {mention.chapter?.url && (
-                                    <a className="mention-chapter-link" href={mention.chapter.url} target="_blank" rel="noreferrer">
-                                      OPEN CHAPTER ↗
-                                    </a>
-                                  )}
-                                </article>
-                              )
-                            })}
-                          </div>
-                        </section>
-                      ))}
+                                    {mention.chapter?.url && (
+                                      <a
+                                        className="mention-chapter-link"
+                                        href={mention.chapter.url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                      >
+                                        OPEN CHAPTER ↗
+                                      </a>
+                                    )}
+                                  </article>
+                                )
+                              })}
+                            </div>
+                          </section>
+                        ),
+                      )}
 
                       {loadingMentions && mentions.length > 0 && (
                         <div className="state-box">Loading more mentions...</div>
@@ -1036,7 +1397,13 @@ function App() {
                         <button
                           className="mentions-load-more"
                           type="button"
-                          onClick={() => loadCharacterMentions(selectedCharacter.id, mentionsOffset, selectedSourceId)}
+                          onClick={() =>
+                            loadCharacterMentions(
+                              selectedCharacter.id,
+                              mentionsOffset,
+                              selectedSourceId,
+                            )
+                          }
                           disabled={loadingMentions}
                         >
                           RETRY LOADING MENTIONS
@@ -1047,10 +1414,18 @@ function App() {
                         <button
                           className="mentions-load-more"
                           type="button"
-                          onClick={() => loadCharacterMentions(selectedCharacter.id, mentionsOffset, selectedSourceId)}
+                          onClick={() =>
+                            loadCharacterMentions(
+                              selectedCharacter.id,
+                              mentionsOffset,
+                              selectedSourceId,
+                            )
+                          }
                           disabled={loadingMentions}
                         >
-                          {loadingMentions ? 'LOADING...' : `LOAD MORE MENTIONS (${mentionsTotal - mentionsOffset} remaining)`}
+                          {loadingMentions
+                            ? 'LOADING...'
+                            : `LOAD MORE MENTIONS (${mentionsTotal - mentionsOffset} remaining)`}
                         </button>
                       )}
                     </section>

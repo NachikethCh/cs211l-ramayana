@@ -81,16 +81,14 @@ def get_sources():
     finally:
         connection.close()
 
+from typing import Optional
+
 @app.get("/characters")
-def get_characters():
+def get_characters(source_id: Optional[int] = None):
     connection = get_connection()
     cursor = connection.cursor()
 
-    # Return the main character fields plus the data needed by the
-    # frontend search box. The event fields are aggregated so the
-    # frontend can search event titles and summaries without making
-    # a separate request for every character.
-    cursor.execute("""
+    query = """
         SELECT
             c.id,
             c.name,
@@ -108,7 +106,10 @@ def get_characters():
                 (
                     SELECT ARRAY_AGG(ce.event_title ORDER BY ce.id)
                     FROM character_events ce
+                    JOIN chapters ch ON ce.chapter_id = ch.id
+                    JOIN books b ON ch.book_id = b.id
                     WHERE ce.character_id = c.id
+                      AND (%(source_id)s IS NULL OR b.source_id = %(source_id)s)
                 ),
                 ARRAY[]::text[]
             ) AS event_titles,
@@ -116,23 +117,46 @@ def get_characters():
                 (
                     SELECT ARRAY_AGG(ce.event_summary ORDER BY ce.id)
                     FROM character_events ce
+                    JOIN chapters ch ON ce.chapter_id = ch.id
+                    JOIN books b ON ch.book_id = b.id
                     WHERE ce.character_id = c.id
+                      AND (%(source_id)s IS NULL OR b.source_id = %(source_id)s)
                 ),
                 ARRAY[]::text[]
-            ) AS event_summaries
+            ) AS event_summaries,
+            COALESCE(
+                (
+                    SELECT ARRAY_AGG(DISTINCT b.source_id ORDER BY b.source_id)
+                    FROM character_mentions cm
+                    JOIN chapters ch ON cm.chapter_id = ch.id
+                    JOIN books b ON ch.book_id = b.id
+                    WHERE cm.character_id = c.id
+                ),
+                ARRAY[]::integer[]
+            ) AS source_ids
         FROM characters c
         LEFT JOIN character_profiles cp
             ON c.id = cp.character_id
+        WHERE (
+            %(source_id)s IS NULL
+            OR EXISTS (
+                SELECT 1
+                FROM character_mentions cm
+                JOIN chapters ch ON cm.chapter_id = ch.id
+                JOIN books b ON ch.book_id = b.id
+                WHERE cm.character_id = c.id
+                  AND b.source_id = %(source_id)s
+            )
+        )
         ORDER BY c.id;
-    """)
+    """
 
+    cursor.execute(query, {"source_id": source_id})
     rows = cursor.fetchall()
-
     cursor.close()
     connection.close()
 
     characters = []
-
     for row in rows:
         characters.append({
             "id": row[0],
@@ -142,6 +166,7 @@ def get_characters():
             "role": row[4],
             "event_titles": row[5],
             "event_summaries": row[6],
+            "source_ids": row[7],
         })
 
     return characters
