@@ -6,13 +6,12 @@
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![Vite](https://img.shields.io/badge/Build-Vite-646CFF?logo=vite&logoColor=white)](https://vite.dev/)
-[![Vercel](https://img.shields.io/badge/Live_Demo-Vercel-000000?logo=vercel&logoColor=white)](https://cs211l-ramayana.vercel.app)
+[![Vercel](https://img.shields.io/badge/Live_Demo-Vercel-000000?logo=vercel&logoColor=white)](https://cs211l-mythverse.vercel.app)
 
 ## 🔗 Live Production Links
 
-- **Primary Web Application:** [cs211l-ramayana.vercel.app](https://cs211l-ramayana.vercel.app)
-- **Vercel Deployment Instance:** `cs211l-ramayana-8choots1m-cs25b011-2686.vercel.app`
-
+- **Primary Web Application:** [cs211l-mythverse.vercel.app](https://cs211l-mythverse.vercel.app)
+- **Legacy Domain (Redirects):** `https://cs211l-ramayana.vercel.app`
 ---
 
 ## Table of Contents
