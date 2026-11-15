@@ -240,7 +240,6 @@ def get_character_story(
     # --------------------------------------------------
     # Get character + profile + aliases
     # --------------------------------------------------
-
     cursor.execute("""
         SELECT
             c.id,
@@ -271,9 +270,8 @@ def get_character_story(
         return {"error": "Character not found"}
 
     # --------------------------------------------------
-    # Get manually curated character relationships
+    # Get character relationships
     # --------------------------------------------------
-
     cursor.execute("""
         SELECT
             c.id,
@@ -288,18 +286,18 @@ def get_character_story(
 
     relationship_rows = cursor.fetchall()
 
-    related_characters = []
-    for row in relationship_rows:
-        related_characters.append({
+    related_characters = [
+        {
             "id": row[0],
             "name": row[1],
             "relationship": row[2],
-        })
+        }
+        for row in relationship_rows
+    ]
 
     # --------------------------------------------------
-    # Get events + source information
+    # Get events + source information for selected source_id
     # --------------------------------------------------
-
     cursor.execute("""
         SELECT
             ce.id,
@@ -331,12 +329,11 @@ def get_character_story(
             ch.chapter_number,
             ce.paragraph_start,
             ce.id;
-    """, (character_id,source_id,source_id))
+    """, (character_id, source_id, source_id))
 
     events = cursor.fetchall()
     story_events = []
 
-    # Fetch the selected source independently of character events.
     source_info = None
     if source_id is not None:
         cursor.execute("""
@@ -344,9 +341,7 @@ def get_character_story(
             FROM sources
             WHERE id = %s;
         """, (source_id,))
-
         source_row = cursor.fetchone()
-
         if source_row:
             source_info = {
                 "title": source_row[0],
@@ -397,14 +392,10 @@ def get_character_story(
             ORDER BY paragraph_number;
         """, (chapter_id, paragraph_start, paragraph_end))
 
-        paragraphs = cursor.fetchall()
-
-        paragraph_data = []
-        for paragraph in paragraphs:
-            paragraph_data.append({
-                "number": paragraph[0],
-                "content": paragraph[1],
-            })
+        paragraph_data = [
+            {"number": p[0], "content": p[1]}
+            for p in cursor.fetchall()
+        ]
 
         story_events.append({
             "id": event_id,
@@ -421,15 +412,109 @@ def get_character_story(
             "paragraphs": paragraph_data,
         })
 
+    # --------------------------------------------------
+    # Per-source breakdown for cross-script comparison
+    # --------------------------------------------------
+    cursor.execute("SELECT id, title FROM sources ORDER BY id;")
+    all_sources_rows = cursor.fetchall()
+
     cursor.execute("""
-        SELECT b.source_id, COUNT(cm.id)
+        SELECT
+            b.source_id,
+            COUNT(cm.id) AS mention_count,
+            ARRAY_AGG(DISTINCT cm.mentioned_text ORDER BY cm.mentioned_text)
+                FILTER (WHERE cm.mentioned_text IS NOT NULL) AS aliases_used
         FROM character_mentions cm
         JOIN chapters ch ON ch.id = cm.chapter_id
         JOIN books b ON b.id = ch.book_id
         WHERE cm.character_id = %s
         GROUP BY b.source_id;
     """, (character_id,))
-    source_mention_counts = {str(row[0]): row[1] for row in cursor.fetchall()}
+    mentions_by_source = {
+        row[0]: {"count": row[1], "aliases_used": row[2] or []}
+        for row in cursor.fetchall()
+    }
+
+    cursor.execute("""
+        SELECT
+            b.source_id,
+            COUNT(ce.id) AS event_count,
+            ARRAY_AGG(ce.event_title ORDER BY ch.chapter_number, ce.paragraph_start, ce.id) AS event_titles
+        FROM character_events ce
+        JOIN chapters ch ON ch.id = ce.chapter_id
+        JOIN books b ON b.id = ch.book_id
+        WHERE ce.character_id = %s
+        GROUP BY b.source_id;
+    """, (character_id,))
+    events_by_source = {
+        row[0]: {"event_count": row[1], "event_titles": (row[2] or [])[:5]}
+        for row in cursor.fetchall()
+    }
+
+    cursor.execute("""
+        SELECT
+            b.source_id,
+            ARRAY_AGG(DISTINCT c2.name ORDER BY c2.name) AS co_characters
+        FROM character_mentions cm1
+        JOIN character_mentions cm2
+          ON cm1.chapter_id = cm2.chapter_id
+         AND cm1.paragraph_number = cm2.paragraph_number
+         AND cm1.character_id <> cm2.character_id
+        JOIN characters c2 ON c2.id = cm2.character_id
+        JOIN chapters ch ON ch.id = cm1.chapter_id
+        JOIN books b ON b.id = ch.book_id
+        WHERE cm1.character_id = %s
+        GROUP BY b.source_id;
+    """, (character_id,))
+    cochars_by_source = {
+        row[0]: (row[1] or [])[:12]
+        for row in cursor.fetchall()
+    }
+
+    cursor.execute("""
+        SELECT DISTINCT ON (b.source_id)
+            b.source_id,
+            ch.chapter_number,
+            ch.title,
+            cp.paragraph_number,
+            cp.content
+        FROM character_mentions cm
+        JOIN chapters ch ON ch.id = cm.chapter_id
+        JOIN books b ON b.id = ch.book_id
+        JOIN chapter_paragraphs cp
+          ON cp.chapter_id = cm.chapter_id
+         AND cp.paragraph_number = cm.paragraph_number
+        WHERE cm.character_id = %s
+          AND cp.content IS NOT NULL
+        ORDER BY b.source_id, ch.chapter_number NULLS LAST, cp.paragraph_number NULLS LAST;
+    """, (character_id,))
+    sample_by_source = {
+        row[0]: {
+            "chapter_number": row[1],
+            "chapter_title": row[2],
+            "paragraph_number": row[3],
+            "content": row[4],
+        }
+        for row in cursor.fetchall()
+    }
+
+    source_mention_counts = {}
+    source_breakdown = {}
+    for s_id, s_title in all_sources_rows:
+        m_info = mentions_by_source.get(s_id, {"count": 0, "aliases_used": []})
+        e_info = events_by_source.get(s_id, {"event_count": 0, "event_titles": []})
+        source_mention_counts[str(s_id)] = m_info["count"]
+        source_breakdown[str(s_id)] = {
+            "source_id": s_id,
+            "source_title": s_title,
+            "mention_count": m_info["count"],
+            "aliases_used": m_info["aliases_used"],
+            "event_count": e_info["event_count"],
+            "event_titles": e_info["event_titles"],
+            "co_characters": cochars_by_source.get(s_id, []),
+            "sample_passage": sample_by_source.get(s_id),
+        }
+
     total_mentions_all_sources = sum(source_mention_counts.values())
 
     cursor.close()
@@ -451,6 +536,7 @@ def get_character_story(
         "related_characters": related_characters,
         "events": story_events,
         "source_mention_counts": source_mention_counts,
+        "source_breakdown": source_breakdown,
         "total_mentions_all_sources": total_mentions_all_sources,
     }
 
@@ -686,7 +772,7 @@ def get_graph(source_id: Optional[int] = None):
 
     # 2. Fetch edges with dynamic weight based on co-occurrence frequency
     links_query = """
-        SELECT source_character_id, target_character_id, COUNT(*) as weight
+        SELECT ce1.character_id AS source_character_id, ce2.character_id AS target_character_id, COUNT(*) as weight
         FROM character_events ce1
         JOIN character_events ce2 
           ON ce1.chapter_id = ce2.chapter_id 
@@ -696,7 +782,7 @@ def get_graph(source_id: Optional[int] = None):
         JOIN chapters ch ON ce1.chapter_id = ch.id
         JOIN books b ON ch.book_id = b.id
         WHERE (%(source_id)s IS NULL OR b.source_id = %(source_id)s)
-        GROUP BY source_character_id, target_character_id
+        GROUP BY ce1.character_id, ce2.character_id
         HAVING COUNT(*) > 1
     """
     cursor.execute(links_query, {"source_id": source_id})
